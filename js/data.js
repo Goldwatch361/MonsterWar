@@ -92,58 +92,56 @@ DATA.eggTypes = [
     id: "standard", name: "Standard-Ei", emoji: "🥚", currency: "gold", cost: 150, minLevel: 1,
     dropMinLevel: 1, dropWeight: 10,
     table: [
-      { rarity: "normal", chance: 0.70 }, { rarity: "selten", chance: 0.20 },
-      { rarity: "episch", chance: 0.08 }, { rarity: "legendaer", chance: 0.02 },
+      { rarity: "normal", chance: 0.70 }, { rarity: "selten", chance: 0.28 }, { rarity: "episch", chance: 0.02 },
     ],
   },
   {
     id: "premium", name: "Premium-Ei", emoji: "✨🥚", currency: "gold", cost: 1500, minLevel: 5,
     dropMinLevel: 5, dropWeight: 6,
     table: [
-      { rarity: "normal", chance: 0.30 }, { rarity: "selten", chance: 0.40 },
-      { rarity: "episch", chance: 0.22 }, { rarity: "legendaer", chance: 0.075 },
-      { rarity: "mythisch", chance: 0.005 },
+      { rarity: "selten", chance: 0.60 }, { rarity: "episch", chance: 0.30 },
+      { rarity: "legendaer", chance: 0.09 }, { rarity: "mythisch", chance: 0.01 },
     ],
   },
   {
     id: "elite", name: "Elite-Ei", emoji: "💎🥚", currency: "crystals", cost: 60, minLevel: 12,
     dropMinLevel: 15, dropWeight: 4,
     table: [
-      { rarity: "selten", chance: 0.45 }, { rarity: "episch", chance: 0.35 },
-      { rarity: "legendaer", chance: 0.17 }, { rarity: "mythisch", chance: 0.03 },
+      { rarity: "episch", chance: 0.65 }, { rarity: "legendaer", chance: 0.30 },
+      { rarity: "mythisch", chance: 0.05 },
     ],
   },
   {
     id: "mythic", name: "Mythisch-Ei", emoji: "🌌🥚", currency: "gold", cost: 10000, minLevel: 20,
     dropMinLevel: 30, dropWeight: 3,
     table: [
-      { rarity: "episch", chance: 0.50 }, { rarity: "legendaer", chance: 0.40 },
-      { rarity: "mythisch", chance: 0.10 },
+      { rarity: "legendaer", chance: 0.60 }, { rarity: "mythisch", chance: 0.35 },
+      { rarity: "goettlich", chance: 0.05 },
     ],
   },
   {
     id: "divine", name: "Göttlich-Ei", emoji: "👼🥚", currency: "gold", cost: 80000, minLevel: 30,
     dropMinLevel: 50, dropWeight: 2,
     table: [
-      { rarity: "legendaer", chance: 0.50 }, { rarity: "mythisch", chance: 0.38 },
-      { rarity: "goettlich", chance: 0.12 },
+      { rarity: "mythisch", chance: 0.55 }, { rarity: "goettlich", chance: 0.35 },
+      { rarity: "uralt", chance: 0.10 },
     ],
   },
   {
     id: "cosmic", name: "Kosmisch-Ei", emoji: "🪐🥚", currency: "crystals", cost: 500, minLevel: 45,
     dropMinLevel: 65, dropWeight: 1,
     table: [
-      { rarity: "mythisch", chance: 0.45 }, { rarity: "goettlich", chance: 0.38 },
-      { rarity: "uralt", chance: 0.14 }, { rarity: "kosmisch", chance: 0.03 },
+      { rarity: "goettlich", chance: 0.50 }, { rarity: "uralt", chance: 0.35 },
+      { rarity: "kosmisch", chance: 0.13 }, { rarity: "titanisch", chance: 0.02 },
     ],
   },
   {
     id: "transcend", name: "Transzendenz-Ei", emoji: "🌠🥚", currency: "gold", cost: 1500000, minLevel: 60,
     // Kein Drop (nur kaufbar)
     table: [
-      { rarity: "goettlich", chance: 0.40 }, { rarity: "uralt", chance: 0.30 },
-      { rarity: "kosmisch", chance: 0.20 }, { rarity: "titanisch", chance: 0.08 },
-      { rarity: "transzendent", chance: 0.02 },
+      { rarity: "uralt", chance: 0.40 }, { rarity: "kosmisch", chance: 0.30 },
+      { rarity: "titanisch", chance: 0.20 }, { rarity: "transzendent", chance: 0.08 },
+      { rarity: "erhaben", chance: 0.02 },
     ],
   },
 ];

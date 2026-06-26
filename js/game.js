@@ -14,6 +14,7 @@ const Game = {
       team: [starter],
       collection: [starter],
       inventory: { eggs: { standard: 0, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 }, crystals: 0 },
+      avatarMonsterId: starter.id,
       enemy: null,
       stage: { current: 1, unlocked: 1, wave: 1, best: {} },
       worldBoss: { level: 1, best: 0 },
@@ -44,6 +45,9 @@ const Game = {
       for (const t of ['standard','premium','elite','mythic','divine','cosmic','transcend']) {
         if (Game.state.inventory.eggs[t] == null) Game.state.inventory.eggs[t] = 0;
       }
+      // Avatar-Migration
+      if (!Game.state.avatarMonsterId && Game.state.collection.length)
+        Game.state.avatarMonsterId = Game.state.collection[0].id;
       // Referenz-Integrität: Team-Einträge sollen auf Collection-Objekte zeigen
       Game.state.team = Game.state.team
         .map(tm => Game.state.collection.find(c => c.id === tm.id))
@@ -266,6 +270,13 @@ const Game = {
   },
   clearTeam() {
     Game.state.team = [];
+    UI.render();
+  },
+  autoFillTeam(stat) {
+    const s = Game.state;
+    const sorted = [...s.collection]
+      .sort((a, b) => stat === "atk" ? b.attack - a.attack : b.defense - a.defense);
+    s.team = sorted.slice(0, Game.MAX_TEAM);
     UI.render();
   },
 

@@ -38,16 +38,22 @@ const Battle = {
     return (stage - 1) * Battle.WAVES_PER_STAGE + wave;
   },
 
-  /* Schadensberechnung mit Element-Vorteil + Varianz */
+  /* Schadensberechnung mit Element-Vorteil + Varianz.
+     Defense = prozentualer Abzug mit Diminishing Returns (max 75 %) — verhindert
+     dass hochrangige Monster komplett immun gegen Gegner-Schaden werden. */
   calculateDamage(attacker, defender) {
     const variance = 0.85 + Math.random() * 0.30;
     let mod = 1;
     const atkEl = DATA.elements[attacker.element];
-    if (atkEl && atkEl.strong === defender.element) mod = 1.20;      // Vorteil
+    if (atkEl && atkEl.strong === defender.element) mod = 1.20;
     else if (defender.element && DATA.elements[defender.element] &&
-             DATA.elements[defender.element].strong === attacker.element) mod = 0.85; // Nachteil
-    const raw = attacker.attack * mod * variance - (defender.defense || 0) * 0.5;
-    return { dmg: Math.max(1, Math.round(raw)), advantage: mod > 1 };
+             DATA.elements[defender.element].strong === attacker.element) mod = 0.85;
+    const def = defender.defense || 0;
+    const atk = attacker.attack;
+    // Soft-Cap: je höher die DEF relativ zu ATK, desto mehr Reduktion — aber nie über 75 %
+    const defReduction = Math.min(0.75, def / (def + atk * 1.5));
+    const raw = Math.round(atk * mod * variance * (1 - defReduction));
+    return { dmg: Math.max(1, raw), advantage: mod > 1 };
   },
 
   /* Stage (neu) starten: Welle 1, Team voll heilen, ersten Gegner spawnen */
@@ -75,10 +81,12 @@ const Battle = {
     const els = Object.keys(DATA.elements);
     const element = els[Math.floor(Math.random() * els.length)];
 
-    let hp     = Math.round(DATA.enemyBase.hp     * Math.pow(lv, 1.4));
-    let attack = Math.round(DATA.enemyBase.attack * Math.pow(lv, 1.3));
-    let reward = Math.round(DATA.enemyBase.reward * Math.pow(lv, 0.6));
-    if (isBoss) { hp = Math.round(hp * 2.5); attack = Math.round(attack * 1.3); reward = Math.round(reward * 3.0); }
+    // Logarithmische Kurve: schnelles frühes Wachstum, das sich bei hohen Leveln abflacht
+    const logLv = Math.log(lv + 1);
+    let hp     = Math.round(DATA.enemyBase.hp     * lv * (0.8 + 0.8 * logLv));
+    let attack = Math.round(DATA.enemyBase.attack * Math.sqrt(lv) * (1.0 + 0.7 * logLv));
+    let reward = Math.round(DATA.enemyBase.reward * Math.pow(lv, 1.1));
+    if (isBoss) { hp = Math.round(hp * 2.5); attack = Math.round(attack * 1.2); reward = Math.round(reward * 3.0); }
 
     s.enemy = {
       name: (isBoss ? "👑 " : "") + tpl.name, emoji: tpl.emoji, element,
@@ -179,7 +187,7 @@ const Battle = {
     }
     s.inventory.crystals += crystals;
     s.kills = (s.kills || 0) + 1;
-    Game.addPlayerExp(50 + lv * 15);
+    Game.addPlayerExp(10);
 
     // Bestwert + nächste Stufe freischalten
     s.worldBoss.best = Math.max(s.worldBoss.best || 0, lv);
@@ -290,7 +298,11 @@ const Battle = {
     } else {
       let target = team.find(m => m.id === Battle.lastAttackerId && m.hp > 0);
       if (!target) target = alive[Math.floor(Math.random() * alive.length)];
-      const dmg = Battle.calculateDamage(s.enemy, target).dmg;
+      // ATK skaliert auf das Ziel: Basis = 12 % des Ziel-MaxHP, damit jedes Monster
+      // unabhängig vom Rang ~8–12 Treffer aushält. Dann greift Varianz + Element + Defense normal.
+      const scaledAtk = Math.round(target.maxHp * 0.12);
+      const scaledEnemy = { ...s.enemy, attack: Math.max(s.enemy.attack, scaledAtk) };
+      const { dmg } = Battle.calculateDamage(scaledEnemy, target);
       target.hp = Math.max(0, target.hp - dmg);
       Battle.fx = { type: "enemy", targetId: target.id, dmg };
       Battle.phase = "team";
@@ -306,8 +318,8 @@ const Battle = {
     s.gold += e.reward;
     s.goldEarned = (s.goldEarned || 0) + e.reward;
 
-    // Spieler-Erfahrung
-    const xp = Math.max(3, Math.round(e.level * 2.5));
+    // Spieler-Erfahrung: fix 5 pro normalen Kill, 10 für Stage-Boss
+    const xp = e.isBoss ? 10 : 5;
     s.xpEarned = (s.xpEarned || 0) + xp;
     s.kills = (s.kills || 0) + 1;
     Game.addPlayerExp(xp);

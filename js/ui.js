@@ -4,6 +4,7 @@ const UI = {
   prevEnemyHp: null,
   kampfView: "modes",   // modes | team | stageSelect | fight
   pendingMode: null,    // welcher Modus in der Team-Auswahl vorbereitet wird
+  teamSort: "rank",     // rank | auto | atk | def
   fusionOpen: {},       // welche Rang-Spoiler im Fusion-Tab aufgeklappt sind
   collOpen: {},         // Rang-Spoiler im Sammlung-Reiter
   dexOpen: {},          // Rang-Spoiler im Dex-Reiter
@@ -17,7 +18,7 @@ const UI = {
     document.getElementById("modal").addEventListener("click", (e) => {
       if (e.target.id === "modal" && UI._modalClosable) UI.closeModal();
     });
-    UI.switchTab("home");
+    UI.switchTab("dashboard");
   },
 
   switchTab(tab) {
@@ -27,6 +28,9 @@ const UI = {
       return;
     }
     UI.current = tab;
+    // Scroll auf Home-Tab komplett sperren, sonst freigeben
+    document.body.style.overflow = tab === "dashboard" ? "hidden" : "";
+    document.documentElement.style.overflow = tab === "dashboard" ? "hidden" : "";
     document.querySelectorAll("#tabbar .tab").forEach(b => {
       b.classList.toggle("active", b.dataset.tab === tab);
     });
@@ -75,10 +79,11 @@ const UI = {
     const view = document.getElementById("view");
     const sy = window.scrollY; // Scroll-Position merken, damit nichts springt
     switch (UI.current) {
-      case "home":     view.innerHTML = UI.renderHome();    UI.refresh(); break;
-      case "monster":  view.innerHTML = UI.renderMonster(); break;
-      case "summon":   view.innerHTML = UI.renderSummon();  break;
-      case "settings": view.innerHTML = UI.renderSettings();break;
+      case "dashboard": view.innerHTML = UI.renderDashboard(); break;
+      case "home":      view.innerHTML = UI.renderHome();    UI.refresh(); break;
+      case "monster":   view.innerHTML = UI.renderMonster(); break;
+      case "summon":    view.innerHTML = UI.renderSummon();  break;
+      case "settings":  view.innerHTML = UI.renderSettings();break;
     }
     window.scrollTo(0, sy);
   },
@@ -101,11 +106,12 @@ const UI = {
   // Stage-Kämpfer: mit eigener HP-Leiste
   fighterHtml(m) {
     const hpPct = Math.max(0, (m.hp / m.maxHp) * 100);
+    const rar = DATA.rarities[m.rarity];
     return `
       <div class="fighter ${m.fused ? "fused" : ""}" id="fighter-${m.id}" style="--rcolor:${UI.rarColor(m.rarity)}">
         <div class="f-emoji">${m.emoji}</div>
         <div class="f-body">
-          <div class="f-name">${m.name}</div>
+          <div class="f-name"><span class="f-rar" style="color:${rar.color}">${rar.name}</span> <span class="f-mname">${m.name}</span></div>
           <div class="hpbar small"><div class="fill" style="width:${hpPct}%"></div></div>
           <div class="f-hp">${Math.ceil(m.hp)} / ${m.maxHp}</div>
         </div>
@@ -114,10 +120,11 @@ const UI = {
 
   // WorldBoss-Kämpfer: ohne eigene HP (gemeinsamer Pool zählt)
   fighterMiniHtml(m) {
+    const rar = DATA.rarities[m.rarity];
     return `
       <div class="fighter mini ${m.fused ? "fused" : ""}" id="fighter-${m.id}" style="--rcolor:${UI.rarColor(m.rarity)}">
         <div class="f-emoji">${m.emoji}</div>
-        <div class="f-body"><div class="f-name">${m.name}</div></div>
+        <div class="f-body"><div class="f-name"><span class="f-rar" style="color:${rar.color}">${rar.name}</span> <span class="f-mname">${m.name}</span></div></div>
       </div>`;
   },
 
@@ -214,6 +221,116 @@ const UI = {
       </div>`;
   },
 
+  renderDashboard() {
+    const s = Game.state;
+    const avatar = s.collection.find(m => m.id === s.avatarMonsterId) || s.collection[0] || null;
+    if (!avatar) return `<div class="home-avatar-wrap"><svg class="home-bg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice"><rect width="400" height="700" fill="#64b5f6"/></svg><div class="hint" style="position:relative;z-index:1;text-align:center;padding:40px 0">Noch keine Monster — beschwöre dein erstes!</div></div>`;
+    const rc = UI.rarColor(avatar.rarity);
+    const rar = DATA.rarities[avatar.rarity];
+    const bg = `<svg class="home-bg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="hsky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0d47a1"/>
+      <stop offset="38%"  stop-color="#0288d1"/>
+      <stop offset="70%"  stop-color="#4fc3f7"/>
+      <stop offset="88%"  stop-color="#b3e5fc"/>
+      <stop offset="100%" stop-color="#e8f4fd"/>
+    </linearGradient>
+    <radialGradient id="hsun" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="20%"  stop-color="#fff9c4"/>
+      <stop offset="50%"  stop-color="#ffe082" stop-opacity=".55"/>
+      <stop offset="100%" stop-color="#ff6f00" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hhaze" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#e1f5fe" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#fffde7" stop-opacity=".3"/>
+    </linearGradient>
+  </defs>
+  <!-- Sky -->
+  <rect width="400" height="700" fill="url(#hsky)"/>
+  <!-- Warm horizon haze -->
+  <rect y="380" width="400" height="320" fill="url(#hhaze)"/>
+  <!-- Sun -->
+  <circle cx="312" cy="82" r="72" fill="url(#hsun)"/>
+  <circle cx="312" cy="82" r="28" fill="#fffde7" opacity=".96"/>
+  <circle cx="312" cy="82" r="18" fill="#ffffff"/>
+  <!-- Wispy cirrus clouds (horizontal, not cartoon) -->
+  <ellipse cx="88"  cy="82"  rx="72" ry="11" fill="white" opacity=".70"/>
+  <ellipse cx="55"  cy="87"  rx="42" ry="7"  fill="white" opacity=".50"/>
+  <ellipse cx="130" cy="78"  rx="48" ry="8"  fill="white" opacity=".55"/>
+  <ellipse cx="92"  cy="72"  rx="36" ry="7"  fill="white" opacity=".40"/>
+  <ellipse cx="228" cy="110" rx="82" ry="12" fill="white" opacity=".62"/>
+  <ellipse cx="192" cy="116" rx="52" ry="8"  fill="white" opacity=".48"/>
+  <ellipse cx="268" cy="106" rx="56" ry="9"  fill="white" opacity=".52"/>
+  <ellipse cx="232" cy="100" rx="42" ry="7"  fill="white" opacity=".38"/>
+  <ellipse cx="152" cy="50"  rx="62" ry="7"  fill="white" opacity=".35"/>
+  <ellipse cx="118" cy="54"  rx="38" ry="5"  fill="white" opacity=".25"/>
+  <ellipse cx="188" cy="46"  rx="44" ry="6"  fill="white" opacity=".28"/>
+  <!-- Far mountains — atmospheric blue-gray haze (depth illusion) -->
+  <path d="M-10,345 C28,268 66,294 106,248 C144,204 180,240 218,210 C256,180 292,220 330,192 C358,170 385,198 410,184 L410,700 L-10,700Z" fill="#78909c" opacity=".45"/>
+  <!-- Mid mountains — cooler muted tones -->
+  <path d="M-10,418 C32,345 70,368 112,320 C152,275 188,308 226,278 C264,248 300,282 338,255 C366,234 390,258 410,244 L410,700 L-10,700Z" fill="#4e6b52" opacity=".72"/>
+  <!-- Near ridge — deeper green -->
+  <path d="M-10,498 C44,438 90,456 148,430 C204,406 250,428 306,410 C346,396 382,412 410,402 L410,700 L-10,700Z" fill="#2e5c1e" opacity=".92"/>
+  <!-- Foreground dark hills -->
+  <path d="M-10,565 C58,520 118,536 200,524 C280,512 352,530 410,517 L410,700 L-10,700Z" fill="#1a3d0c"/>
+  <!-- Ground -->
+  <rect y="625" width="400" height="75" fill="#122a08"/>
+  <!-- Atmospheric depth haze between ridges -->
+  <ellipse cx="200" cy="448" rx="260" ry="22" fill="#b3e5fc" opacity=".18"/>
+  <ellipse cx="200" cy="505" rx="250" ry="16" fill="#c8e6c9" opacity=".16"/>
+  <!-- Pine silhouettes on near ridge -->
+  <path d="M48,428  L57,388  L66,428Z"  fill="#122a08"/>
+  <path d="M51,412  L57,380  L63,412Z"  fill="#122a08"/>
+  <path d="M118,420 L127,382 L136,420Z" fill="#122a08"/>
+  <path d="M121,405 L127,374 L133,405Z" fill="#122a08"/>
+  <path d="M328,414 L336,378 L344,414Z" fill="#122a08"/>
+  <path d="M331,400 L336,370 L341,400Z" fill="#122a08"/>
+  <path d="M372,418 L380,384 L388,418Z" fill="#122a08"/>
+  <path d="M374,403 L380,375 L386,403Z" fill="#122a08"/>
+</svg>`;
+    return `
+      <div class="home-avatar-wrap" ondblclick="UI.openAvatarPicker()">
+        ${bg}
+        <div class="home-av-float ${UI.glowClass(avatar.rarity)}" style="--rcolor:${rc}">
+          <div class="home-av-emoji">${avatar.emoji}</div>
+        </div>
+        <div class="home-av-info">
+          <div class="home-av-name">${avatar.name}</div>
+          <div class="home-av-rar" style="color:${rc}">${rar.name}</div>
+          <div class="home-av-hint">Doppeltippen zum Ändern</div>
+        </div>
+      </div>`;
+  },
+
+  openAvatarPicker() {
+    const s = Game.state;
+    const groups = Game.collectionGroups();
+    const cards = groups.map(g => {
+      const m = g.sample;
+      const rc = UI.rarColor(m.rarity);
+      const active = m.id === s.avatarMonsterId;
+      return `
+        <div class="av-pick-card ${active ? "active" : ""} ${UI.glowClass(m.rarity)}" style="--rcolor:${rc}" onclick="UI.setAvatar('${m.id}')">
+          <div class="av-pick-emoji">${m.emoji}</div>
+          <div class="av-pick-rar" style="color:${rc}">${DATA.rarities[m.rarity].name.slice(0,4)}</div>
+          <div class="av-pick-name">${m.name}</div>
+        </div>`;
+    }).join("");
+    UI.modal(`
+      <h3 style="margin:0 0 14px;font-size:16px">🐾 Avatar wählen</h3>
+      <div class="av-pick-grid">${cards}</div>
+      <button class="btn ghost" style="margin-top:14px" onclick="UI.closeModal()">Schließen</button>
+    `);
+  },
+
+  setAvatar(id) {
+    Game.state.avatarMonsterId = id;
+    UI.closeModal();
+    UI.render();
+  },
+
   /* Kampf-Tab: Router — Modus-Auswahl → Team-Auswahl → (Stage-Auswahl) → Kampf */
   renderHome() {
     switch (UI.kampfView) {
@@ -248,39 +365,40 @@ const UI = {
       </div>`;
   },
 
-  /* Team-Auswahl (nur Stage) — Monster hinzufügen + Team-Box unten */
+  /* Team-Auswahl (nur Stage) — kompakte Zeilen, ATK/DEF füllen Team automatisch */
   renderTeamSelect() {
     const s = Game.state;
     const groups = Game.collectionGroups();
     const full = s.team.length >= Game.MAX_TEAM;
 
-    const cards = groups.map(g => {
+    // Standardreihenfolge: höchster Rang zuerst
+    const sorted = [...groups].sort((a, b) =>
+      DATA.rarities[b.sample.rarity].order - DATA.rarities[a.sample.rarity].order
+    );
+
+    const rows = sorted.map(g => {
       const m = g.sample;
       const inTeam = g.members.filter(x => s.team.some(t => t.id === x.id)).length;
       const canAdd = inTeam < g.count && !full;
+      const canClick = inTeam > 0 || canAdd;
+      const clickFn = inTeam > 0 ? `Game.teamRemoveFromGroup('${g.key}')` : `Game.teamAddFromGroup('${g.key}')`;
       return `
-        <div class="mon ${m.fused ? "fused" : ""} ${UI.glowClass(m.rarity)}" style="--rcolor:${UI.rarColor(m.rarity)}">
-          <div class="count-badge">×${g.count}</div>
-          <div class="mhead">
-            <div class="memoji">${m.emoji}</div>
-            <div>
-              <div class="mname">${m.name}</div>
-              <div class="mmeta"><span class="rarity">${DATA.rarities[m.rarity].name}</span></div>
-            </div>
+        <div class="tsel-row ${m.fused ? "fused" : ""} ${UI.glowClass(m.rarity)} ${inTeam > 0 ? "in-team" : ""} ${!canClick ? "tsel-disabled" : ""}"
+             style="--rcolor:${UI.rarColor(m.rarity)}" onclick="${canClick ? clickFn : ''}">
+          <div class="tsr-emoji">${m.emoji}</div>
+          <div class="tsr-info">
+            <div class="tsr-name">${m.name}</div>
+            <div class="tsr-rar" style="color:${UI.rarColor(m.rarity)}">${DATA.rarities[m.rarity].name}</div>
           </div>
-          <div class="stats">
-            <span class="s-atk">⚔️ <b>${UI.fmt(m.attack)}</b></span>
-            <span class="s-def">🛡️ <b>${UI.fmt(m.defense)}</b></span>
-            <span style="color:var(--accent2)">Team ${inTeam}/${g.count}</span>
+          <div class="tsr-stats">
+            <span>⚔️ ${UI.fmt(m.attack)}</span>
+            <span>🛡️ ${UI.fmt(m.defense)}</span>
           </div>
-          <div class="btn-row">
-            <button class="btn sm ${canAdd ? "good" : "ghost"}" onclick="Game.teamAddFromGroup('${g.key}')" ${canAdd ? "" : "disabled"}>
-              ＋ Hinzufügen</button>
-          </div>
+          <div class="tsr-meta">${inTeam > 0 ? `<span class="tsr-inteam">✓ ${inTeam}</span>` : `<span style="color:var(--muted)">×${g.count}</span>`}</div>
         </div>`;
     }).join("");
 
-    // Team-Box (5 Slots) — gefüllte Slots klickbar zum Entfernen
+    // Team-Box: kompakte Zeile (Slots + Buttons)
     let slots = "";
     for (let i = 0; i < Game.MAX_TEAM; i++) {
       const m = s.team[i];
@@ -294,16 +412,21 @@ const UI = {
       <div class="panel">
         <div class="mode-bar"><button class="btn ghost sm" onclick="Game.backToModes()">← Modus</button></div>
         <h2>🏟️ Stage — Team wählen</h2>
-        <p class="hint" style="text-align:left;padding:0 0 8px">Tippe <b>Hinzufügen</b>, um Monster ins Team zu holen (max. 5). Im Team unten antippen, um es zu entfernen.</p>
-        <div class="coll-grid">${cards || '<div class="hint">Noch keine Monster.</div>'}</div>
+        <div class="tsel-autofill">
+          <span class="tsel-autofill-label">Schnellauswahl:</span>
+          <button class="btn sm good" onclick="Game.autoFillTeam('atk')">⚔️ Bestes ATK-Team</button>
+          <button class="btn sm good" onclick="Game.autoFillTeam('def')">🛡️ Bestes DEF-Team</button>
+        </div>
+        <div class="tsel-list">${rows || '<div class="hint">Noch keine Monster.</div>'}</div>
       </div>
-      <div style="height:180px"></div>
+      <div class="tb-spacer"></div>
       <div class="team-box">
-        <div class="tb-title">Dein Team <span>(${s.team.length}/${Game.MAX_TEAM})</span></div>
-        <div class="team-slots">${slots}</div>
-        <div class="btn-row">
-          <button class="btn ghost" onclick="Game.clearTeam()" ${s.team.length ? "" : "disabled"}>Leeren</button>
-          <button class="btn" onclick="Game.confirmTeam()" ${s.team.length >= 1 ? "" : "disabled"}>Weiter ▶</button>
+        <div class="tb-inner">
+          <div class="team-slots">${slots}</div>
+          <div class="tb-actions">
+            <button class="btn ghost" onclick="Game.clearTeam()" ${s.team.length ? "" : "disabled"} title="Team leeren">✕</button>
+            <button class="btn" onclick="Game.confirmTeam()" ${s.team.length >= 1 ? "" : "disabled"}>Weiter ▶</button>
+          </div>
         </div>
       </div>`;
   },
@@ -343,8 +466,7 @@ const UI = {
     return `
       <div class="panel">
         <div class="mode-bar">
-          <button class="btn ghost sm" onclick="Game.backToStageSelect()">← Stages</button>
-          <button class="btn ghost sm" onclick="Game.restartStageRun()">↻ Neu starten</button>
+          <button class="btn ghost sm" onclick="Game.backToStageSelect()">Kampf verlassen</button>
         </div>
         <div class="stage-head">
           <div class="stage-now" id="stg-now">🏟️ Stage ${st.current} · Welle ${st.wave}/${W}${Battle.frontier ? " 🚩" : ""}</div>
@@ -365,7 +487,6 @@ const UI = {
       <div class="panel">
         <div class="mode-bar">
           <button class="btn ghost sm" onclick="Game.backToModes()">← Zurück</button>
-          <button class="btn ghost sm" onclick="Game.restartWorldBoss()">↻ Neu starten</button>
         </div>
         <h2>🌌 WorldBoss — Stufe ${s.worldBoss.level}</h2>
         <div class="wb-stats">
@@ -454,7 +575,7 @@ const UI = {
       for (const m of s.team) {
         const f = document.getElementById("fighter-" + m.id);
         if (!f || !f.querySelector(".f-hp")) continue;
-        f.querySelector(".f-name").textContent = m.name;
+        f.querySelector(".f-mname").textContent = m.name;
         f.querySelector(".hpbar .fill").style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
         f.querySelector(".f-hp").textContent = Math.max(0, Math.ceil(m.hp)) + " / " + m.maxHp;
         f.classList.toggle("dead", m.hp <= 0);
