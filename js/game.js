@@ -13,7 +13,7 @@ const Game = {
       playerExp: 0,
       team: [starter],
       collection: [starter],
-      inventory: { eggs: 0, crystals: 0, upgradeStones: 0 },
+      inventory: { eggs: { standard: 0, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 }, crystals: 0 },
       enemy: null,
       stage: { current: 1, unlocked: 1, wave: 1, best: {} },
       worldBoss: { level: 1, best: 0 },
@@ -36,6 +36,14 @@ const Game = {
       if (!Game.state.stage) Game.state.stage = { current: 1, unlocked: 1, wave: 1, best: {} };
       if (!Game.state.worldBoss) Game.state.worldBoss = { level: 1, best: 0 };
       if (Game.state.playerExp == null) Game.state.playerExp = 0;
+      // Eier-Migration: altes Format war eine Zahl → Objekt mit Standard-Eiern
+      if (typeof Game.state.inventory.eggs === 'number') {
+        const old = Game.state.inventory.eggs;
+        Game.state.inventory.eggs = { standard: old, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 };
+      }
+      for (const t of ['standard','premium','elite','mythic','divine','cosmic','transcend']) {
+        if (Game.state.inventory.eggs[t] == null) Game.state.inventory.eggs[t] = 0;
+      }
       // Referenz-Integrität: Team-Einträge sollen auf Collection-Objekte zeigen
       Game.state.team = Game.state.team
         .map(tm => Game.state.collection.find(c => c.id === tm.id))
@@ -151,64 +159,63 @@ const Game = {
     Game.state.collection.push(m);
   },
 
-  /* ---- Summon (mehrere Banner, Mehrfach-Beschwörung) ---- */
-  SUMMON_MAX: 100, // Obergrenze für „Max"
+  /* ---- Ei-Beschwörung ---- */
+  SUMMON_MAX: 100,
 
-  summonAffordable(banner) {
-    const s = Game.state;
-    const have = banner.currency === "crystals" ? s.inventory.crystals : s.gold;
-    return Math.min(Game.SUMMON_MAX, Math.floor(have / banner.cost));
-  },
-
-  // count: Anzahl; "max" = so viele wie bezahlbar
-  summon(bannerId, count = 1) {
-    const s = Game.state;
-    const banner = DATA.summonBanners.find(b => b.id === bannerId) || DATA.summonBanners[0];
-
-    if (s.playerLevel < banner.minLevel) { UI.toast(`Erst ab Spieler-Level ${banner.minLevel}!`, "bad"); return; }
-
-    let n = count === "max" ? Game.summonAffordable(banner) : count;
-    n = Math.min(n, Game.summonAffordable(banner));
-    if (n < 1) { UI.toast(banner.currency === "crystals" ? "Nicht genug Kristalle!" : "Nicht genug Gold!", "bad"); return; }
-
-    const totalCost = banner.cost * n;
-    if (banner.currency === "crystals") s.inventory.crystals -= totalCost;
-    else s.gold -= totalCost;
-
-    const counts = {};
-    let best = null;
+  /* Würfelt n Monster aus der Ei-Tafel und gibt sie zurück */
+  _rollEgg(egg, n) {
+    const results = [];
     for (let i = 0; i < n; i++) {
       const roll = Math.random();
-      let acc = 0, rarity = banner.table[0].rarity;
-      for (const row of banner.table) { acc += row.chance; if (roll <= acc) { rarity = row.rarity; break; } }
+      let acc = 0, rarity = egg.table[0].rarity;
+      for (const row of egg.table) { acc += row.chance; if (roll <= acc) { rarity = row.rarity; break; } }
       const mon = Monster.randomOfRarity(rarity);
       Game.addMonster(mon);
-      counts[rarity] = (counts[rarity] || 0) + 1;
-      if (!best || DATA.rarities[rarity].order > DATA.rarities[best].order) best = rarity;
+      results.push(mon);
     }
+    return results;
+  },
 
-    if (n === 1) {
-      UI.toast(`${banner.emoji} ${DATA.rarities[best].name}!`, DATA.rarities[best].order >= 1 ? "good" : "");
-    } else {
-      const summary = DATA.rarityOrder.filter(r => counts[r]).map(r => `${counts[r]}× ${DATA.rarities[r].name}`).join(", ");
-      UI.toast(`${banner.emoji} ${n} Beschwörungen — bestes: ${DATA.rarities[best].name}`, "good");
-      UI.modal(`<div class="emoji-xl">${banner.emoji}</div><h2>${n}× ${banner.name}</h2><p>${summary}</p>
-        <button class="btn" style="margin-top:12px" onclick="UI.closeModal()">Super!</button>`);
-    }
+  /* Ei kaufen & sofort öffnen (Summon-Tab "Kaufen") */
+  buyAndCrack(eggId, count = 1) {
+    const s = Game.state;
+    const egg = DATA.eggTypes.find(e => e.id === eggId);
+    if (!egg) return;
+    if (s.playerLevel < egg.minLevel) { UI.toast(`🥚 Erst ab Spieler-Level ${egg.minLevel}!`, "bad"); return; }
+    const have = egg.currency === "crystals" ? s.inventory.crystals : s.gold;
+    const max = Math.min(Game.SUMMON_MAX, Math.floor(have / egg.cost));
+    const n = count === "max" ? max : Math.min(count, max);
+    if (n < 1) { UI.toast(egg.currency === "crystals" ? "Nicht genug Kristalle! 💎" : "Nicht genug Gold! 💰", "bad"); return; }
+    const totalCost = egg.cost * n;
+    if (egg.currency === "crystals") s.inventory.crystals -= totalCost;
+    else s.gold -= totalCost;
+    const results = Game._rollEgg(egg, n);
+    UI.showSummonResult(results, egg);
     UI.render();
   },
 
-  hatchEgg() {
+  /* Gedropptes Ei aus Inventar öffnen */
+  crackDroppedEgg(eggId, count = 1) {
     const s = Game.state;
-    if (s.inventory.eggs < 1) return;
-    s.inventory.eggs--;
-    // Ei: bessere Chancen als normaler Summon
-    const roll = Math.random();
-    const rarity = roll < 0.45 ? "normal" : roll < 0.8 ? "selten" : roll < 0.97 ? "episch" : "legendaer";
-    const mon = Monster.randomOfRarity(rarity);
-    Game.addMonster(mon);
-    UI.toast(`🥚 Geschlüpft: ${mon.name} (${DATA.rarities[rarity].name})!`, "good");
+    const egg = DATA.eggTypes.find(e => e.id === eggId);
+    if (!egg) return;
+    const have = s.inventory.eggs[eggId] || 0;
+    const n = count === "max" ? have : Math.min(count, have);
+    if (n < 1) { UI.toast("Keine Eier dieser Art!", "bad"); return; }
+    s.inventory.eggs[eggId] -= n;
+    const results = Game._rollEgg(egg, n);
+    UI.showSummonResult(results, egg);
     UI.render();
+  },
+
+  /* Rückwärtskompatibilität für alten hatchEgg()-Aufruf */
+  hatchEgg() { Game.crackDroppedEgg("standard", 1); },
+
+  /* Wie viele Eier eines Typs man sich leisten kann (für Max-Button) */
+  summonAffordable(egg) {
+    const s = Game.state;
+    const have = egg.currency === "crystals" ? s.inventory.crystals : s.gold;
+    return Math.min(Game.SUMMON_MAX, Math.floor(have / egg.cost));
   },
 
   /* ---- Team ---- */
@@ -288,17 +295,31 @@ const Game = {
     return groups;
   },
 
+  /* Gold-Kosten für eine Fusion (Ergebnis-Rang entscheidet) */
+  fuseCost(resultRarity) {
+    const order = DATA.rarities[resultRarity].order;
+    return Math.round(50 * Math.pow(1.9, order));
+  },
+
   /* Alle fusionierbaren Gruppen eines Rangs auf einmal max-fusionieren */
   fuseAllInRank(rarity) {
     const s = Game.state;
+    const groups = Game.collectionGroups().filter(g => g.sample.rarity === rarity && g.count >= 2);
+    if (!groups.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
+
+    const resultRarity = DATA.nextRarity(rarity);
+    const costPer = Game.fuseCost(resultRarity);
+    const totalPairs = groups.reduce((sum, g) => sum + Math.floor(g.count / 2), 0);
+    const totalCost = costPer * totalPairs;
+    if (s.gold < totalCost) {
+      UI.toast(`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 für alle Fusionen benötigt.`, "bad");
+      return;
+    }
+    s.gold -= totalCost;
+
     let totalMade = 0, lastFused = null;
-    // Snapshot der fusionsbaren Gruppen (Sammlung ändert sich beim Fusionieren)
-    const keys = Game.collectionGroups()
-      .filter(g => g.sample.rarity === rarity && g.count >= 2)
-      .map(g => g.key);
-    if (!keys.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
-    for (const key of keys) {
-      const g = Game.collectionGroups().find(gr => gr.key === key);
+    for (const initGroup of groups) {
+      const g = Game.collectionGroups().find(gr => gr.key === initGroup.key);
       if (!g || g.count < 2) continue;
       const members = g.members.slice();
       const pairs = Math.floor(members.length / 2);
@@ -313,7 +334,7 @@ const Game = {
       }
     }
     if (!totalMade) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
-    UI.toast(`⚛ ${totalMade}× ${DATA.rarities[rarity].name} fusioniert → ${DATA.rarities[lastFused.rarity].name}!`, "good");
+    UI.toast(`⚛ ${totalMade}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
     UI.render();
   },
 
@@ -328,6 +349,16 @@ const Game = {
     let p = pairs === "max" ? maxPairs : Math.min(parseInt(pairs, 10) || 1, maxPairs);
     if (p < 1) return;
 
+    // Gold-Kosten prüfen
+    const resultRarity = DATA.nextRarity(group.members[0].rarity);
+    const costPer = Game.fuseCost(resultRarity);
+    const totalCost = costPer * p;
+    if (s.gold < totalCost) {
+      UI.toast(`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 benötigt.`, "bad");
+      return;
+    }
+    s.gold -= totalCost;
+
     // paarweise fusionieren
     const members = group.members.slice();
     let made = 0, lastFused = null;
@@ -340,7 +371,7 @@ const Game = {
       Game.addMonster(fused);
       made++; lastFused = fused;
     }
-    if (made > 0) UI.toast(`⚛ ${made}× Fusion → ${lastFused.name} (${DATA.rarities[lastFused.rarity].name})!`, "good");
+    if (made > 0) UI.toast(`⚛ ${made}× Fusion → ${lastFused.name} (${DATA.rarities[lastFused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
     UI.render();
   },
 

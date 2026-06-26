@@ -75,10 +75,10 @@ const Battle = {
     const els = Object.keys(DATA.elements);
     const element = els[Math.floor(Math.random() * els.length)];
 
-    let hp     = Math.round(DATA.enemyBase.hp     * Math.pow(lv, 1.5));
+    let hp     = Math.round(DATA.enemyBase.hp     * Math.pow(lv, 1.4));
     let attack = Math.round(DATA.enemyBase.attack * Math.pow(lv, 1.3));
     let reward = Math.round(DATA.enemyBase.reward * Math.pow(lv, 0.6));
-    if (isBoss) { hp = Math.round(hp * 1.8); attack = Math.round(attack * 1.15); reward = Math.round(reward * 2.0); }
+    if (isBoss) { hp = Math.round(hp * 2.5); attack = Math.round(attack * 1.3); reward = Math.round(reward * 3.0); }
 
     s.enemy = {
       name: (isBoss ? "👑 " : "") + tpl.name, emoji: tpl.emoji, element,
@@ -166,12 +166,18 @@ const Battle = {
     const gold = Math.round(cfg.goldBase * Math.pow(lv, cfg.goldLevelPow));
     const eggs = 1 + Math.floor(lv / 3);
     const crystals = 5 + lv * 2;
-    const stones = 1 + Math.floor(lv / 2);
-
     s.gold += gold; s.goldEarned = (s.goldEarned || 0) + gold;
-    s.inventory.eggs += eggs;
+    // Eier nach WB-Level verteilen
+    const eligible = DATA.eggTypes.filter(et => et.dropMinLevel != null && lv >= et.dropMinLevel);
+    for (let i = 0; i < eggs; i++) {
+      if (!eligible.length) { s.inventory.eggs.standard++; continue; }
+      const tw = eligible.reduce((sum, et) => sum + (et.dropWeight || 1), 0);
+      let pick = Math.random() * tw;
+      let chosen = eligible[0];
+      for (const et of eligible) { pick -= (et.dropWeight || 1); if (pick <= 0) { chosen = et; break; } }
+      s.inventory.eggs[chosen.id] = (s.inventory.eggs[chosen.id] || 0) + 1;
+    }
     s.inventory.crystals += crystals;
-    s.inventory.upgradeStones += stones;
     s.kills = (s.kills || 0) + 1;
     Game.addPlayerExp(50 + lv * 15);
 
@@ -184,7 +190,7 @@ const Battle = {
     Battle.wbClearTimers();
     s.enemy = null;
     UI.kampfView = "modes";
-    UI.showWorldBossReward(lv, { gold, eggs, crystals, stones });
+    UI.showWorldBossReward(lv, { gold, eggs, crystals });
     if (UI.current === "home") UI.render();
   },
 
@@ -300,13 +306,16 @@ const Battle = {
     s.gold += e.reward;
     s.goldEarned = (s.goldEarned || 0) + e.reward;
 
-    // Spieler-Erfahrung (Monster haben kein Level)
+    // Spieler-Erfahrung
     const xp = Math.max(3, Math.round(e.level * 2.5));
     s.xpEarned = (s.xpEarned || 0) + xp;
     s.kills = (s.kills || 0) + 1;
     Game.addPlayerExp(xp);
 
-    UI.toast("+" + e.reward + " 💰", "gold");
+    // Schwebende Gold/XP-Indikatoren über dem Gegner
+    const enemyEl = document.getElementById("enemy-fighter");
+    UI.floatGain(enemyEl, "+" + e.reward.toLocaleString("de-DE") + " 💰", "dmg-gold", 42);
+    UI.floatGain(enemyEl, "+" + xp + " XP", "dmg-xp", 76);
 
     // Drops
     Battle.rollDrops(e);
@@ -315,20 +324,26 @@ const Battle = {
   rollDrops(e) {
     const s = Game.state;
     const r = Math.random();
-    // 4% Monster-Drop, 6% Ei, 8% Kristall, 5% Upgrade-Stein
+    const playerLevel = s.playerLevel || 1;
+    // 4% Monster-Drop, 10% Ei (Typ abhängig vom Spieler-Level), 8% Kristall, 5% Stein
     if (r < 0.04 && s.collection.length < 200) {
       const mon = Monster.randomOfRarity("normal");
       Game.addMonster(mon);
       UI.toast("🎁 " + mon.name + " erbeutet!", "good");
-    } else if (r < 0.10) {
-      s.inventory.eggs++;
-      UI.toast("🥚 Monster-Ei gefunden!", "good");
-    } else if (r < 0.18) {
+    } else if (r < 0.14) {
+      // Ei-Typ nach Spieler-Level bestimmen (gewichtet)
+      const eligible = DATA.eggTypes.filter(et => et.dropMinLevel != null && playerLevel >= et.dropMinLevel);
+      if (eligible.length > 0) {
+        const totalWeight = eligible.reduce((sum, et) => sum + (et.dropWeight || 1), 0);
+        let pick = Math.random() * totalWeight;
+        let chosen = eligible[0];
+        for (const et of eligible) { pick -= (et.dropWeight || 1); if (pick <= 0) { chosen = et; break; } }
+        s.inventory.eggs[chosen.id] = (s.inventory.eggs[chosen.id] || 0) + 1;
+        UI.toast(`${chosen.emoji} ${chosen.name} gefunden!`, "good");
+      }
+    } else if (r < 0.22) {
       s.inventory.crystals += 1 + Math.floor(e.level / 20);
       UI.toast("💎 Kristall gefunden!", "good");
-    } else if (r < 0.23) {
-      s.inventory.upgradeStones++;
-      UI.toast("🪨 Upgrade-Stein gefunden!", "good");
     }
   },
 };

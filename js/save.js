@@ -21,7 +21,8 @@ const Save = {
       if (!raw) return null;
       const data = JSON.parse(raw);
       // einfache Migration / Defaults
-      if (!data.inventory) data.inventory = { eggs: 0, crystals: 0, upgradeStones: 0 };
+      if (!data.inventory) data.inventory = { eggs: 0, crystals: 0 };
+      delete data.inventory.upgradeStones;
       if (!data.settings) data.settings = { sound: true, autosave: true };
       if (!data.stage) data.stage = { current: 1, unlocked: 1, wave: 1, best: {} };
       if (!data.worldBoss) data.worldBoss = { level: 1, best: 0 };

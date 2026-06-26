@@ -21,6 +21,11 @@ const UI = {
   },
 
   switchTab(tab) {
+    // Navigation während eines aktiven Kampfes sperren
+    if (tab !== "home" && Battle.mode) {
+      UI.toast("⚔️ Du kämpfst gerade — verlasse erst den Kampf!", "bad");
+      return;
+    }
     UI.current = tab;
     document.querySelectorAll("#tabbar .tab").forEach(b => {
       b.classList.toggle("active", b.dataset.tab === tab);
@@ -82,8 +87,7 @@ const UI = {
     const s = Game.state; if (!s) return;
     document.getElementById("gold").textContent = Math.floor(s.gold).toLocaleString("de-DE");
     document.getElementById("crystals").textContent = s.inventory.crystals;
-    document.getElementById("eggs").textContent = s.inventory.eggs;
-    document.getElementById("stones").textContent = s.inventory.upgradeStones;
+    document.getElementById("eggs").textContent = Object.values(s.inventory.eggs).reduce((a, b) => a + b, 0);
     document.getElementById("totalAtk").textContent = UI.fmt(Game.totalAttack());
     document.getElementById("totalDef").textContent = UI.fmt(Game.totalDefense());
     document.getElementById("playerLevel").textContent = s.playerLevel;
@@ -178,8 +182,6 @@ const UI = {
   <ellipse cx="200" cy="172" rx="130" ry="10" fill="#705020" opacity=".45"/>
   <line x1="50"  y1="153" x2="165" y2="167" stroke="#6a4c1e" stroke-width="1" opacity=".5"/>
   <line x1="225" y1="161" x2="355" y2="152" stroke="#6a4c1e" stroke-width="1" opacity=".4"/>
-  <rect width="42" height="200" fill="#0a0604" opacity=".5"/>
-  <rect x="358" width="42" height="200" fill="#0a0604" opacity=".5"/>
   <rect width="400" height="14" fill="#040302" opacity=".55"/>
 </svg></div>`;
   },
@@ -394,6 +396,17 @@ const UI = {
     const d = document.createElement("div");
     d.className = "dmg-float " + (kind || "");
     d.textContent = "-" + Math.round(amount).toLocaleString("de-DE");
+    el.appendChild(d);
+    setTimeout(() => d.remove(), 850);
+  },
+
+  /* Schwebender Gewinn-Text (Gold, XP) über einem Element; topPx steuert Startposition */
+  floatGain(el, text, kind, topPx = 4) {
+    if (!el) return;
+    const d = document.createElement("div");
+    d.className = "dmg-float " + (kind || "");
+    d.textContent = text;
+    d.style.top = topPx + "px";
     el.appendChild(d);
     setTimeout(() => d.remove(), 850);
   },
@@ -621,47 +634,49 @@ const UI = {
 
   renderSummon() {
     const s = Game.state;
-    const banners = DATA.summonBanners.map(b => {
-      const locked = s.playerLevel < b.minLevel;
-      const have = b.currency === "crystals" ? s.inventory.crystals : s.gold;
-      const afford = have >= b.cost;
-      const curIcon = b.currency === "crystals" ? "💎" : "💰";
-      // kompakte Raten-Chips (höchster Rang zuerst)
-      const rates = b.table.slice().sort((x, y) => DATA.rarities[y.rarity].order - DATA.rarities[x.rarity].order)
-        .map(r => `<span class="rate-chip" style="color:${DATA.rarities[r.rarity].color};border-color:${DATA.rarities[r.rarity].color}">${DATA.rarities[r.rarity].name.slice(0, 3)} ${(r.chance * 100).toFixed(r.chance < 0.01 ? 1 : 0)}%</span>`).join("");
-      const maxN = Game.summonAffordable(b);
+    const eggs = s.inventory.eggs;
+
+    const buyCards = DATA.eggTypes.map(egg => {
+      const locked = s.playerLevel < egg.minLevel;
+      const have = egg.currency === "crystals" ? s.inventory.crystals : s.gold;
+      const afford1 = have >= egg.cost;
+      const maxN = Game.summonAffordable(egg);
+      const curIcon = egg.currency === "crystals" ? "💎" : "💰";
+      const cnt = eggs[egg.id] || 0;
+      const rates = egg.table.slice()
+        .sort((x, y) => DATA.rarities[y.rarity].order - DATA.rarities[x.rarity].order)
+        .map(r => `<span class="rate-chip" style="color:${DATA.rarities[r.rarity].color};border-color:${DATA.rarities[r.rarity].color}">${DATA.rarities[r.rarity].name.slice(0, 3)} ${(r.chance * 100).toFixed(r.chance < 0.01 ? 1 : 0)}%</span>`)
+        .join("");
       return `
         <div class="summon-card ${locked ? "locked" : ""}">
           <div class="sc-head">
-            <span class="sc-emoji">${b.emoji}</span>
+            <span class="sc-emoji">${egg.emoji}</span>
             <div class="sc-title">
-              <div class="sc-name">${b.name}</div>
-              <div class="sc-cost">${b.cost.toLocaleString("de-DE")} ${curIcon}</div>
+              <div class="sc-name">${egg.name}</div>
+              <div class="sc-cost">${egg.cost.toLocaleString("de-DE")} ${curIcon}</div>
             </div>
+            ${cnt > 0 ? `<span class="egg-stock-badge">×${cnt}</span>` : ""}
           </div>
           <div class="sc-rates">${rates}</div>
           ${locked
-            ? `<div class="sc-lock">🔒 Ab Level ${b.minLevel}</div>`
+            ? `<div class="sc-lock">🔒 Ab Level ${egg.minLevel}</div>`
             : `<div class="summon-btns">
-                 <button class="btn sm" onclick="Game.summon('${b.id}',1)" ${afford ? "" : "disabled"}>×1</button>
-                 <button class="btn sm" onclick="Game.summon('${b.id}',10)" ${maxN >= 10 ? "" : "disabled"}>×10</button>
-                 <button class="btn sm good" onclick="Game.summon('${b.id}','max')" ${maxN >= 1 ? "" : "disabled"}>Max ${maxN >= 1 ? maxN : 0}</button>
-               </div>`}
+                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 1)" ${afford1 ? "" : "disabled"}>×1</button>
+                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 10)" ${maxN >= 10 ? "" : "disabled"}>×10</button>
+                 <button class="btn sm good" onclick="Game.buyAndCrack('${egg.id}', 'max')" ${maxN >= 1 ? "" : "disabled"}>Max ${maxN || 0}</button>
+               </div>
+               ${cnt > 0 ? `<div class="egg-stock-row">
+                 <span>Im Vorrat: ${cnt}</span>
+                 <button class="btn sm" onclick="Game.crackDroppedEgg('${egg.id}', 1)">×1 Öffnen</button>
+                 ${cnt > 1 ? `<button class="btn sm good" onclick="Game.crackDroppedEgg('${egg.id}', 'max')">Alle ×${cnt}</button>` : ""}
+               </div>` : ""}`}
         </div>`;
     }).join("");
 
     return `
       <div class="panel">
-        <div class="items-strip">
-          <span>🥚 <b>${s.inventory.eggs}</b></span>
-          <span>💎 <b>${s.inventory.crystals}</b></span>
-          <span>🪨 <b>${s.inventory.upgradeStones}</b></span>
-          <button class="btn sm ghost" onclick="Game.hatchEgg()" ${s.inventory.eggs > 0 ? "" : "disabled"}>🥚 Ausbrüten</button>
-        </div>
-      </div>
-      <div class="panel">
         <h2>🔮 Beschwörung</h2>
-        <div class="summon-grid">${banners}</div>
+        <div class="summon-grid">${buyCards}</div>
       </div>`;
   },
 
@@ -698,6 +713,9 @@ const UI = {
         let options = "";
         for (let p = 1; p <= maxPairs; p++) options += `<option value="${p}">${p}×</option>`;
         if (maxPairs > 1) options += `<option value="max">Max (${maxPairs}×)</option>`;
+        const resultRarity = DATA.nextRarity(m.rarity);
+        const fuseCostPer = Game.fuseCost(resultRarity);
+        const canAffordOne = Game.state.gold >= fuseCostPer;
         const i = idx++;
         UI._fuseKeys[i] = g.key;
         return `
@@ -717,9 +735,9 @@ const UI = {
             ${canFuse ? `
               <div class="fuse-row">
                 <select id="fuseamt-${i}" class="fuse-sel">${options}</select>
-                <button class="btn sm good" onclick="UI.doFuse(${i})">⚛ Fusionieren</button>
+                <button class="btn sm good" onclick="UI.doFuse(${i})" ${canAffordOne ? "" : "disabled"}>⚛ Fusionieren</button>
               </div>
-              <div class="mmeta">→ ${DATA.rarities[DATA.nextRarity(m.rarity)].name}</div>`
+              <div class="mmeta">→ ${DATA.rarities[resultRarity].name} · <span style="color:var(--gold)">${fuseCostPer.toLocaleString("de-DE")} 💰</span></div>`
               : `<div class="mmeta" style="margin-top:8px">Nur 1× — keine Fusion möglich</div>`}
           </div>`;
       }).join("");
@@ -732,7 +750,7 @@ const UI = {
               <span class="rh-info">${list.length} Arten${fuseableCount ? ` · ${fuseableCount} fusionierbar` : ""}</span>
               <span class="rh-arrow">${open ? "▲" : "▼"}</span>
             </button>
-            ${fuseableCount ? `<button class="btn sm good rank-fuse-all" onclick="Game.fuseAllInRank('${rarity}')">⚛ Alle</button>` : ""}
+            ${fuseableCount ? `<button class="btn sm good rank-fuse-all" onclick="Game.fuseAllInRank('${rarity}')" title="${(Game.fuseCost(DATA.nextRarity(rarity)) * list.filter(g=>g.count>=2).reduce((s,g)=>s+Math.floor(g.count/2),0)).toLocaleString('de-DE')} 💰 gesamt">⚛ Alle</button>` : ""}
           </div>
           ${open ? `<div class="coll-grid rank-body">${cards}</div>` : ""}
         </div>`;
@@ -772,6 +790,55 @@ const UI = {
       </div>`;
   },
 
+  /* ---- Beschwörungs-Ergebnis ---- */
+  showSummonResult(monsters, eggType) {
+    if (!monsters || !monsters.length) return;
+    if (monsters.length === 1) {
+      const m = monsters[0];
+      const rc = UI.rarColor(m.rarity);
+      UI.modal(`
+        <div class="egg-reveal single">
+          <div class="egg-phase1" id="ep1">
+            <div class="reveal-egg-emoji">${eggType.emoji}</div>
+          </div>
+          <div class="egg-phase2 ep-hidden" id="ep2">
+            <div class="reveal-mon-emoji ${UI.glowClass(m.rarity)}" style="color:${rc}">${m.emoji}</div>
+            <div class="reveal-mon-name" style="color:${rc}">${m.name}</div>
+            <div class="reveal-mon-rar">${DATA.rarities[m.rarity].name}</div>
+            <div class="reveal-mon-stats">❤️ ${UI.fmt(m.maxHp)} · ⚔️ ${UI.fmt(m.attack)} · 🛡️ ${UI.fmt(m.defense)}</div>
+          </div>
+          <button class="btn ep-hidden" id="ep-close" style="margin-top:16px" onclick="UI.closeModal()">Super! 🎉</button>
+        </div>`, false);
+      setTimeout(() => {
+        const p1 = document.getElementById("ep1");
+        if (p1) p1.classList.add("cracking");
+      }, 120);
+      setTimeout(() => {
+        const p1 = document.getElementById("ep1"), p2 = document.getElementById("ep2"), btn = document.getElementById("ep-close");
+        if (p1) p1.classList.add("ep-gone");
+        if (p2) p2.classList.remove("ep-hidden");
+        if (btn) btn.classList.remove("ep-hidden");
+        if (p2) setTimeout(() => p2.classList.add("appearing"), 10);
+      }, 960);
+    } else {
+      // Multi: Karten-Raster
+      const cards = monsters.map(m => {
+        const rc = UI.rarColor(m.rarity);
+        return `<div class="egg-mini-card" style="border-color:${rc}">
+          <div class="egg-mini-emoji">${m.emoji}</div>
+          <div class="egg-mini-rar" style="color:${rc}">${DATA.rarities[m.rarity].name.slice(0, 5)}</div>
+        </div>`;
+      }).join("");
+      UI.modal(`
+        <div class="egg-multi-reveal">
+          <div style="font-size:28px;margin-bottom:4px">${eggType.emoji} ×${monsters.length}</div>
+          <h3 style="margin:0 0 12px;font-size:16px">${eggType.name}</h3>
+          <div class="egg-mini-cards">${cards}</div>
+          <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Super! 🎉</button>
+        </div>`);
+    }
+  },
+
   /* ---- Toast ---- */
   toast(msg, type = "") {
     const t = document.createElement("div");
@@ -807,7 +874,7 @@ const UI = {
       <div class="emoji-xl">🏆</div>
       <h2>WorldBoss Stufe ${level} besiegt!</h2>
       <div class="reward-line">+${r.gold.toLocaleString("de-DE")} 💰</div>
-      <div class="reward-line">+${r.eggs} 🥚 · +${r.crystals} 💎 · +${r.stones} 🪨</div>
+      <div class="reward-line">+${r.eggs} 🥚 · +${r.crystals} 💎</div>
       <p>Stufe ${level + 1} ist jetzt verfügbar.</p>
       <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Weiter</button>
     `);

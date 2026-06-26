@@ -84,20 +84,21 @@ DATA.templatesByRarity = (() => {
   return map;
 })();
 
-/* Beschwörungs-Banner: verschiedene Pools mit besseren Raten, höheren Kosten,
-   freigeschaltet ab bestimmtem Spieler-Level. */
-DATA.summonBanners = [
+/* Ei-Typen: das neue Beschwörungs-System.
+   dropMinLevel = ab welchem Spielerlevel dieses Ei aus Stage/WB droppen kann.
+   dropWeight   = relative Häufigkeit im Drop-Pool (höher = häufiger). */
+DATA.eggTypes = [
   {
-    id: "standard", name: "Standard-Ruf", emoji: "🔮", currency: "gold", cost: 150, minLevel: 1,
-    desc: "Immer verfügbar.",
+    id: "standard", name: "Standard-Ei", emoji: "🥚", currency: "gold", cost: 150, minLevel: 1,
+    dropMinLevel: 1, dropWeight: 10,
     table: [
       { rarity: "normal", chance: 0.70 }, { rarity: "selten", chance: 0.20 },
       { rarity: "episch", chance: 0.08 }, { rarity: "legendaer", chance: 0.02 },
     ],
   },
   {
-    id: "premium", name: "Premium-Ruf", emoji: "✨", currency: "gold", cost: 1500, minLevel: 5,
-    desc: "Bessere Chancen auf Selten & Episch.",
+    id: "premium", name: "Premium-Ei", emoji: "✨🥚", currency: "gold", cost: 1500, minLevel: 5,
+    dropMinLevel: 5, dropWeight: 6,
     table: [
       { rarity: "normal", chance: 0.30 }, { rarity: "selten", chance: 0.40 },
       { rarity: "episch", chance: 0.22 }, { rarity: "legendaer", chance: 0.075 },
@@ -105,40 +106,40 @@ DATA.summonBanners = [
     ],
   },
   {
-    id: "elite", name: "Elite-Ruf", emoji: "💎", currency: "crystals", cost: 60, minLevel: 12,
-    desc: "Kristall-Banner: garantiert mindestens Selten.",
+    id: "elite", name: "Elite-Ei", emoji: "💎🥚", currency: "crystals", cost: 60, minLevel: 12,
+    dropMinLevel: 15, dropWeight: 4,
     table: [
       { rarity: "selten", chance: 0.45 }, { rarity: "episch", chance: 0.35 },
       { rarity: "legendaer", chance: 0.17 }, { rarity: "mythisch", chance: 0.03 },
     ],
   },
   {
-    id: "mythic", name: "Mythischer Ruf", emoji: "🌌", currency: "gold", cost: 10000, minLevel: 20,
-    desc: "Nur Episch und besser — Chance auf Mythisch!",
+    id: "mythic", name: "Mythisch-Ei", emoji: "🌌🥚", currency: "gold", cost: 10000, minLevel: 20,
+    dropMinLevel: 30, dropWeight: 3,
     table: [
       { rarity: "episch", chance: 0.50 }, { rarity: "legendaer", chance: 0.40 },
       { rarity: "mythisch", chance: 0.10 },
     ],
   },
   {
-    id: "divine", name: "Göttlicher Ruf", emoji: "😇", currency: "gold", cost: 80000, minLevel: 30,
-    desc: "Legendär aufwärts — Chance auf Göttlich.",
+    id: "divine", name: "Göttlich-Ei", emoji: "👼🥚", currency: "gold", cost: 80000, minLevel: 30,
+    dropMinLevel: 50, dropWeight: 2,
     table: [
       { rarity: "legendaer", chance: 0.50 }, { rarity: "mythisch", chance: 0.38 },
       { rarity: "goettlich", chance: 0.12 },
     ],
   },
   {
-    id: "cosmic", name: "Kosmischer Ruf", emoji: "🪐", currency: "crystals", cost: 500, minLevel: 45,
-    desc: "Kristall-Banner: Mythisch aufwärts bis Kosmisch.",
+    id: "cosmic", name: "Kosmisch-Ei", emoji: "🪐🥚", currency: "crystals", cost: 500, minLevel: 45,
+    dropMinLevel: 65, dropWeight: 1,
     table: [
       { rarity: "mythisch", chance: 0.45 }, { rarity: "goettlich", chance: 0.38 },
       { rarity: "uralt", chance: 0.14 }, { rarity: "kosmisch", chance: 0.03 },
     ],
   },
   {
-    id: "transcend", name: "Transzendenz-Ruf", emoji: "🌠", currency: "gold", cost: 1500000, minLevel: 60,
-    desc: "Das Beste vom Besten — bis hin zu Transzendent!",
+    id: "transcend", name: "Transzendenz-Ei", emoji: "🌠🥚", currency: "gold", cost: 1500000, minLevel: 60,
+    // Kein Drop (nur kaufbar)
     table: [
       { rarity: "goettlich", chance: 0.40 }, { rarity: "uralt", chance: 0.30 },
       { rarity: "kosmisch", chance: 0.20 }, { rarity: "titanisch", chance: 0.08 },
@@ -146,6 +147,7 @@ DATA.summonBanners = [
     ],
   },
 ];
+DATA.summonBanners = DATA.eggTypes; // Rückwärtskompatibilität
 
 /* Rang-Titel für fusionierte Monster (alle 19 Fusionsziele = alle Ränge außer Normal) */
 DATA.rarityTitles = {
@@ -176,10 +178,9 @@ DATA.summonCost = 100;
 DATA.worldBoss = {
   emojis: ["🌌", "🐲", "👹", "🦏", "🦖", "🐙"],
   names: ["Weltenfresser", "Titanwurm", "Höllenkoloss", "Urdrache", "Leviathan", "Sternenbestie"],
-  // FIXE HP — unabhängig vom Spieler, aber pro Stufe stärker (exponentiell)
-  baseHp: 60000, hpGrowth: 1.7,
+  baseHp: 8000000, hpGrowth: 2.5,
   dmgPct: 0.10,
-  goldBase: 400, goldLevelPow: 1.3,
+  goldBase: 1000, goldLevelPow: 1.5,
 };
 
 /* Fähigkeiten-Pool für Fusion (zufällige Bonus-Fähigkeit) */
@@ -210,7 +211,7 @@ DATA.enemyTiers = [
 ];
 
 /* Gegner-Basiswerte (Level-1-Goblin = HP50 / Atk5 / Reward20 lt. Spec) */
-DATA.enemyBase = { hp: 60, attack: 5, reward: 4 };
+DATA.enemyBase = { hp: 80, attack: 4, reward: 5 };
 
 /* Offline-Cap in Sekunden (8 Stunden) */
 DATA.offlineCapSeconds = 8 * 3600;
