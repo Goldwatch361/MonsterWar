@@ -203,35 +203,60 @@ body {
 .team-pick .tp-count { font-size: 11px; color: var(--muted); }
 .team-pick .btn { flex: 0 0 auto; min-width: 40px; padding: 6px 0; }
 
-/* Team-Box unten — fixiert über der Tabbar */
+/* ===== Team-Auswahl: kompakte Listenansicht ===== */
+.tsel-autofill { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.tsel-autofill-label { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+.tsel-autofill .btn { flex: 1; font-size: 10px; padding: 4px 8px; min-height: unset; }
+.tsel-list { display: flex; flex-direction: column; gap: 8px; }
+.tsel-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--panel2); border: 2px solid var(--rcolor, var(--line));
+  border-radius: 12px; padding: 12px 14px;
+  cursor: pointer; transition: filter .12s, transform .08s, background .12s;
+}
+.tsel-row:hover { filter: brightness(1.08); }
+.tsel-row:active { transform: scale(.98); }
+.tsel-row.in-team { background: color-mix(in srgb, var(--rcolor, #7c5cff) 14%, var(--panel2)); border-width: 2.5px; }
+.tsel-row.tsel-disabled { opacity: .45; cursor: default; }
+.tsel-row.tsel-disabled:hover { filter: none; }
+.tsel-row.tsel-disabled:active { transform: none; }
+.tsr-emoji { font-size: 32px; width: 38px; text-align: center; flex-shrink: 0; line-height: 1; }
+.tsr-info { flex: 1; min-width: 0; }
+.tsr-name { font-weight: 700; font-size: 15px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsr-rar { font-size: 11px; font-weight: 600; margin-top: 2px; }
+.tsr-stats { display: flex; flex-direction: column; gap: 3px; font-size: 12px; text-align: right; flex-shrink: 0; white-space: nowrap; }
+.tsr-meta { font-size: 12px; width: 44px; text-align: center; flex-shrink: 0; }
+.tsr-inteam { color: var(--accent2); font-weight: 800; font-size: 13px; }
+
+/* Team-Box unten — fixiert über der Tabbar, kompakte Zeile */
+.tb-spacer { height: 96px; }
 .team-box {
   position: fixed; bottom: 82px; left: 50%; transform: translateX(-50%);
   width: min(732px, calc(100% - 16px)); z-index: 15;
   background: var(--panel); border: 1px solid var(--accent);
   box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 16px -6px var(--accent);
-  border-radius: 14px; padding: 12px;
+  border-radius: 14px; padding: 8px 12px;
 }
-.tb-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
-.tb-title span { color: var(--muted); font-weight: 500; }
-.team-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.tb-inner { display: flex; align-items: center; gap: 8px; }
+.team-slots { display: flex; gap: 5px; flex: 1; }
 .team-slot {
-  aspect-ratio: 1 / 1; border-radius: 10px;
+  width: 52px; height: 52px; border-radius: 10px; flex-shrink: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  position: relative; font-size: 26px;
+  position: relative;
 }
 .team-slot.empty { border: 1.5px dashed var(--line); color: var(--muted); font-size: 20px; }
 .team-slot.filled {
   background: var(--panel2); border: 1.5px solid var(--rcolor, var(--line)); cursor: pointer;
-  box-shadow: 0 0 10px -3px var(--rcolor, transparent);
+  box-shadow: 0 0 8px -3px var(--rcolor, transparent);
 }
-.team-slot.filled .ts-emoji { font-size: 28px; line-height: 1; }
-.team-slot.filled .ts-lv { font-size: 9px; color: var(--muted); margin-top: 2px; }
+.team-slot.filled .ts-emoji { font-size: 26px; line-height: 1; }
 .team-slot.filled .ts-x {
-  position: absolute; top: 2px; right: 4px; font-size: 10px; color: var(--bad);
+  position: absolute; top: 2px; right: 4px; font-size: 9px; color: var(--bad);
   opacity: 0; transition: opacity .15s;
 }
 .team-slot.filled:hover .ts-x { opacity: 1; }
-.team-box .btn-row { margin-top: 10px; }
+.tb-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: stretch; }
+.tb-actions .btn { width: auto; }
 
 /* ===== Stage-Auswahl: kompakte Kacheln ===== */
 .frontier-btn { box-shadow: 0 3px 14px -4px var(--gold); background: linear-gradient(180deg, #ffcf52, #e0a52f); color: #2a1d00; }
@@ -534,7 +559,8 @@ body {
 .fighter .f-emoji { font-size: 30px; line-height: 1; flex: 0 0 auto; }
 .fighter .f-body { flex: 1; min-width: 0; }
 .fighter .f-name { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fighter .f-name span { color: var(--muted); font-weight: 500; }
+.fighter .f-rar { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+.fighter .f-mname { color: var(--text); font-weight: 700; }
 .fighter .f-hp { font-size: 10px; color: var(--muted); margin-top: 3px; }
 .fighter.fused { box-shadow: 0 0 0 1px var(--accent) inset, 0 0 14px rgba(124,92,255,.22); }
 .fighter.dead { opacity: .45; filter: grayscale(.7); }
@@ -648,7 +674,7 @@ button { font-family: inherit; cursor: pointer; }
 #tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
   max-width: 760px; margin: 0 auto;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   background: linear-gradient(0deg, var(--bg2), rgba(22,26,38,.9));
   backdrop-filter: blur(6px);
   border-top: 1px solid var(--line);
@@ -662,6 +688,68 @@ button { font-family: inherit; cursor: pointer; }
 #tabbar .tab span { font-size: 10px; letter-spacing: .3px; }
 #tabbar .tab.active { color: var(--text); }
 #tabbar .tab.active span { color: var(--accent2); }
+
+/* ===== Home Avatar ===== */
+.home-avatar-wrap {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  margin: -14px;
+  height: calc(100dvh - 108px);
+  overflow: hidden; touch-action: none;
+  cursor: pointer; user-select: none; position: relative;
+}
+.home-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.home-av-info { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+@keyframes homeFloat {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-18px); }
+}
+/* Emoji-Container: weicher Farb-Glow, kein harter Kreis */
+.home-av-float {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 240px; height: 240px;
+}
+.home-av-float::before {
+  content: ""; position: absolute;
+  width: 260px; height: 260px;
+  background: radial-gradient(circle, var(--rcolor, #7c5cff) 0%, transparent 68%);
+  opacity: .5; pointer-events: none;
+}
+.home-av-emoji {
+  font-size: 160px; line-height: 1; position: relative; z-index: 1;
+  animation: homeFloat 3.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 28px var(--rcolor, #7c5cff)) drop-shadow(0 4px 12px rgba(0,0,0,.4));
+}
+.home-av-name {
+  font-size: 24px; font-weight: 800; margin-top: 14px; color: #fff;
+  text-shadow: 0 1px 8px rgba(0,0,0,.65), 0 0 24px rgba(0,0,0,.3);
+}
+.home-av-rar {
+  font-size: 13px; font-weight: 700; margin-top: 5px;
+  text-transform: uppercase; letter-spacing: .6px;
+  text-shadow: 0 1px 5px rgba(0,0,0,.6);
+}
+.home-av-hint {
+  font-size: 11px; color: rgba(255,255,255,.7); margin-top: 12px;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+}
+
+/* Avatar Picker Modal */
+.av-pick-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  gap: 8px; max-height: 55vh; overflow-y: auto;
+}
+.av-pick-card {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--panel2); border: 1.5px solid var(--rcolor, var(--line));
+  border-radius: 10px; padding: 8px 4px; cursor: pointer;
+  transition: background .15s;
+}
+.av-pick-card:hover, .av-pick-card.active {
+  background: color-mix(in srgb, var(--rcolor, #7c5cff) 15%, var(--panel2));
+}
+.av-pick-emoji { font-size: 30px; line-height: 1; }
+.av-pick-rar   { font-size: 9px; font-weight: 700; }
+.av-pick-name  { font-size: 9px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; padding: 0 2px; }
 
 /* ===== Summon ===== */
 .rate-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
