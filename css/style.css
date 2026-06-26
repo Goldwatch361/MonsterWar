@@ -318,16 +318,77 @@ body {
 .enemy-fighter, .wb-pool { position: relative; }
 .dmg-float {
   position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
-  font-weight: 800; font-size: 18px; pointer-events: none; z-index: 8;
-  text-shadow: 0 2px 4px #000; animation: dmgFloat .85s ease-out forwards;
+  font-weight: 900; font-size: 32px; pointer-events: none; z-index: 8; white-space: nowrap;
+  text-shadow: 0 2px 8px #000, 0 0 16px rgba(0,0,0,.8); animation: dmgFloat .85s ease-out forwards;
 }
-.dmg-float.dmg-enemy { color: #ffe06a; }
+.dmg-float.dmg-enemy  { color: #ffe06a; }
 .dmg-float.dmg-player { color: var(--hp); }
+.dmg-float.dmg-gold   { color: #ffd700; font-size: 22px; }
+.dmg-float.dmg-xp     { color: #c06aff; font-size: 20px; }
 @keyframes dmgFloat {
-  0% { opacity: 0; transform: translate(-50%, 6px) scale(.7); }
-  20% { opacity: 1; transform: translate(-50%, -4px) scale(1.1); }
-  100% { opacity: 0; transform: translate(-50%, -42px) scale(1); }
+  0%   { opacity: 0; transform: translate(-50%, 6px)   scale(.6); }
+  20%  { opacity: 1; transform: translate(-50%, -6px)  scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -56px) scale(1); }
 }
+
+/* ===== Ei-Vorrat (inline in Kauf-Karte) ===== */
+.egg-stock-badge {
+  margin-left: auto; background: var(--gold); color: #000;
+  font-size: 11px; font-weight: 800; padding: 2px 7px;
+  border-radius: 99px; white-space: nowrap; align-self: center;
+}
+.egg-stock-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+}
+
+/* ===== Beschwörungs-Ergebnis (Einzel-Ei-Animation) ===== */
+.egg-reveal.single { text-align: center; }
+.egg-phase1 { display: flex; align-items: center; justify-content: center; min-height: 140px; }
+.egg-phase2 { text-align: center; }
+.ep-hidden  { display: none !important; }
+.ep-gone    { display: none !important; }
+
+.reveal-egg-emoji { font-size: 86px; display: inline-block; line-height: 1; }
+.egg-phase1.cracking .reveal-egg-emoji { animation: eggCrack .84s ease forwards; }
+
+.reveal-mon-emoji { font-size: 72px; display: block; margin: 0 auto; }
+.egg-phase2.appearing .reveal-mon-emoji { animation: monReveal .5s ease forwards; }
+.reveal-mon-name  { font-size: 20px; font-weight: 800; margin: 10px 0 4px; }
+.reveal-mon-rar   { font-size: 13px; margin-bottom: 6px; }
+.reveal-mon-stats { font-size: 12px; color: var(--muted); }
+
+@keyframes eggCrack {
+  0%   { transform: scale(1)    rotate(0deg);   opacity: 1; }
+  20%  { transform: scale(1.25) rotate(-9deg);  }
+  40%  { transform: scale(1.15) rotate(8deg);   }
+  60%  { transform: scale(1.05) rotate(-5deg);  }
+  80%  { transform: scale(0.7)  rotate(12deg);  opacity: 0.3; }
+  100% { transform: scale(0)    rotate(18deg);  opacity: 0; }
+}
+@keyframes monReveal {
+  0%   { opacity: 0; transform: scale(0.15) rotate(-12deg); }
+  65%  { transform: scale(1.18) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1)    rotate(0deg); opacity: 1; }
+}
+
+/* ===== Beschwörungs-Ergebnis (Mehrfach-Karten-Raster) ===== */
+.egg-multi-reveal { text-align: center; }
+.egg-mini-cards {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  justify-content: center; margin: 8px 0;
+  max-height: 58vh; overflow-y: auto;
+}
+.egg-mini-card {
+  width: 58px; height: 68px;
+  border: 2.5px solid var(--border); border-radius: 8px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  background: rgba(255,255,255,.04);
+}
+.egg-mini-emoji { font-size: 26px; }
+.egg-mini-rar   { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
 
 /* Stage-Auswahl als Raster + Frontier-Hervorhebung */
 .stage-select.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); overflow: visible; }
@@ -401,9 +462,7 @@ body {
 }
 .panel.arena-bg.stage::after {
   inset: 0;
-  background:
-    linear-gradient(90deg, rgba(0,0,0,.35) 0%, transparent 18%, transparent 82%, rgba(0,0,0,.35) 100%),
-    linear-gradient(180deg, rgba(0,0,0,.28) 0%, transparent 25%);
+  background: linear-gradient(180deg, rgba(0,0,0,.28) 0%, transparent 25%);
 }
 
 @keyframes torchFlicker {
