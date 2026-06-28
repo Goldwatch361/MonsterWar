@@ -45,7 +45,7 @@
   --el-licht: #ffe06a;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
 html, body { height: 100%; }
 body {
   font-family: "Segoe UI", Roboto, system-ui, sans-serif;
@@ -76,10 +76,12 @@ body {
 .brand .ver { color: var(--muted); font-weight: 500; font-size: 11px; }
 .resources { display: flex; flex-wrap: wrap; gap: 6px; }
 .res {
+  flex: 1;
+  text-align: center;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 4px 10px; font-size: 13px;
+  padding: 5px 12px; font-size: 15px;
 }
 .res b { color: var(--gold); }
 .res.atk b { color: var(--hp2); }
@@ -799,6 +801,49 @@ button { font-family: inherit; cursor: pointer; }
 .mine-collect-btn { max-width: 220px; width: 100%; margin-top: 4px; }
 .mine-info { font-size: 12px; color: var(--muted); }
 
+/* ===== Minen-Grid (neue Karten-Ansicht) ===== */
+.mines-grid { display: flex; flex-direction: column; gap: 10px; }
+
+.mine-card {
+  --mcolor: #9aa4bf;
+  background: linear-gradient(135deg, var(--panel2) 55%, color-mix(in srgb, var(--mcolor) 12%, var(--panel2)) 100%);
+  border: 1.5px solid color-mix(in srgb, var(--mcolor) 40%, transparent);
+  border-radius: 14px; padding: 14px 16px;
+  position: relative; overflow: hidden;
+  box-shadow: 0 4px 24px -10px var(--mcolor), inset 0 0 40px -25px var(--mcolor);
+  transition: box-shadow .3s, transform .08s;
+}
+.mine-card:active { transform: scale(.99); }
+.mine-card.mc-owned {
+  box-shadow: 0 4px 28px -5px var(--mcolor), inset 0 0 40px -18px var(--mcolor);
+}
+.mine-card::after {
+  content: ""; position: absolute; top: -50px; right: -50px;
+  width: 140px; height: 140px; border-radius: 50%;
+  background: radial-gradient(circle, var(--mcolor), transparent 70%);
+  opacity: .14; pointer-events: none;
+}
+
+.mc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.mc-emoji  { font-size: 38px; line-height: 1; flex-shrink: 0; transition: transform .2s; }
+.mc-title  { flex: 1; min-width: 0; }
+.mc-name   { font-weight: 800; font-size: 15px; }
+.mc-sub    { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.mc-badge  {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #000;
+}
+
+.mc-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.mc-bar { flex: 1; height: 8px; border-radius: 999px; background: rgba(0,0,0,.4); overflow: hidden; }
+.mc-fill { height: 100%; transition: width .1s linear; border-radius: 999px; }
+.mc-timer { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--gold); flex-shrink: 0; }
+.mc-timer.mine-cd-ready { color: var(--good); }
+
+.mc-collect-btn, .mc-buy-btn { width: 100%; }
+.mc-buy-desc { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+
 /* Side-Buttons auf dem Home-Bildschirm (Mine, etc.) */
 .home-side-btn {
   position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
@@ -881,12 +926,12 @@ button { font-family: inherit; cursor: pointer; }
   /* --- Topbar: immer eine Zeile für Resources --- */
   #topbar { padding: 5px 8px; gap: 3px; }
   .brand { display: none; }
-  .resources { flex-wrap: nowrap; gap: 3px; }
-  .res { padding: 2px 5px; font-size: 10px; flex-shrink: 1; min-width: 0; white-space: nowrap; }
+  .resources { flex-wrap: nowrap; gap: 4px; }
+  .res { padding: 3px 7px; font-size: 13px; white-space: nowrap; }
   .xp-strip { gap: 5px; }
-  .xp-lvl { font-size: 10px; }
-  .xp-strip-bar { height: 10px; }
-  .xp-strip-bar > .txt { font-size: 8px; }
+  .xp-lvl { font-size: 12px; }
+  .xp-strip-bar { height: 11px; }
+  .xp-strip-bar > .txt { font-size: 9px; }
 
   /* --- App-Layout --- */
   #app { padding-bottom: 68px; }
@@ -1022,12 +1067,11 @@ button { font-family: inherit; cursor: pointer; }
   .hsb-icon  { font-size: 22px; }
   .hsb-label { font-size: 9px; }
 
-  /* --- Mine --- */
-  .mine-big-icon  { font-size: 60px; }
-  .mine-countdown { font-size: 28px; }
-  .mine-bar       { max-width: 100%; }
-  .mine-collect-btn { max-width: 100%; }
-  .mine-desc { font-size: 13px; }
+  /* --- Mine Cards --- */
+  .mc-emoji { font-size: 28px; }
+  .mc-name  { font-size: 13px; }
+  .mc-sub   { font-size: 11px; }
+  .mine-card { padding: 11px 12px; }
 }
 
 /* --- Sehr kleine Bildschirme (≤ 360px) --- */
