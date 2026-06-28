@@ -57,10 +57,12 @@ body {
 #app {
   max-width: 760px;
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   padding-bottom: 78px;
+  overflow: hidden;
 }
 
 /* ===== Topbar ===== */
@@ -69,8 +71,8 @@ body {
   background: linear-gradient(180deg, var(--bg2), rgba(22,26,38,.85));
   backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--line);
-  padding: 10px 14px;
-  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
 }
 .brand { font-weight: 700; font-size: 16px; letter-spacing: .3px; }
 .brand .ver { color: var(--muted); font-weight: 500; font-size: 11px; }
@@ -241,6 +243,12 @@ body {
   box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 16px -6px var(--accent);
   border-radius: 14px; padding: 8px 12px;
 }
+.team-box.inline {
+  position: static; transform: none; width: 100%;
+  box-shadow: none; border-radius: 10px; padding: 8px 0;
+  background: transparent; border: none;
+  border-bottom: 1px solid var(--line);
+}
 .tb-inner { display: flex; align-items: center; gap: 8px; }
 .team-slots { display: flex; gap: 5px; flex: 1; }
 .team-slot {
@@ -307,7 +315,10 @@ body {
 .fuse-row .btn { flex: 1; }
 
 /* ===== WorldBoss: Team-HP-Pool ===== */
-.wb-team { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+.wb-team { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.wb-team .fighter.mini { grid-column: span 2; }
+.wb-team .fighter.mini:nth-child(4) { grid-column: 2 / span 2; }
+.wb-team .fighter.mini:nth-child(5) { grid-column: 4 / span 2; }
 .fighter.mini { flex-direction: column; text-align: center; padding: 8px 4px; gap: 2px; }
 .fighter.mini .f-name { font-size: 10px; white-space: normal; }
 .wb-pool { margin-top: 10px; position: relative; }
@@ -927,7 +938,7 @@ button { font-family: inherit; cursor: pointer; }
 @media (max-width: 480px) {
 
   /* --- Topbar: immer eine Zeile für Resources --- */
-  #topbar { padding: 5px 8px; gap: 3px; }
+  #topbar { padding: 8px 10px; gap: 5px; }
   .brand { display: none; }
   .resources { flex-wrap: nowrap; gap: 4px; }
   .res { padding: 3px 7px; font-size: 13px; white-space: nowrap; }
@@ -1057,7 +1068,8 @@ button { font-family: inherit; cursor: pointer; }
   .erl-count { font-size: 14px; }
 
   /* --- WorldBoss --- */
-  .wb-team { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 4px; }
+  .wb-team { gap: 4px; }
+  .wb-team .fighter.mini { padding: 6px 3px; }
 
   /* --- Home Avatar --- */
   .home-avatar-wrap { height: calc(100dvh - 90px); }
