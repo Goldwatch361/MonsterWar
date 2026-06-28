@@ -28,7 +28,12 @@ const UI = {
       UI.toast("⚔️ Du kämpfst gerade — verlasse erst den Kampf!", "bad");
       return;
     }
+    if (tab === "home" && Battle.mode === "worldboss") {
+      UI.toast("⚔️ Du kämpfst gerade — verlasse erst den Kampf!", "bad");
+      return;
+    }
     UI.current = tab;
+    if (tab === "dashboard") UI.dashView = "avatar";
     // Scroll auf Home-Tab komplett sperren, sonst freigeben
     document.body.style.overflow = tab === "dashboard" ? "hidden" : "";
     document.documentElement.style.overflow = tab === "dashboard" ? "hidden" : "";
@@ -229,6 +234,18 @@ const UI = {
   },
 
   _mineTimer: null,
+  _lpTimer: null,
+  _dtLast: 0,
+  _lpStart() {
+    const now = Date.now();
+    if (now - UI._dtLast < 350) { UI._dtLast = 0; UI.openAvatarPicker(); return; }
+    UI._dtLast = now;
+    if (UI._lpTimer) return;
+    UI._lpTimer = setTimeout(() => { UI._lpTimer = null; UI.openAvatarPicker(); }, 2000);
+  },
+  _lpCancel() {
+    if (UI._lpTimer) { clearTimeout(UI._lpTimer); UI._lpTimer = null; }
+  },
 
   openMine() {
     UI.dashView = "mine";
@@ -406,7 +423,9 @@ const UI = {
   <path d="M374,403 L380,375 L386,403Z" fill="#122a08"/>
 </svg>`;
     return `
-      <div class="home-avatar-wrap" ondblclick="UI.openAvatarPicker()">
+      <div class="home-avatar-wrap"
+           onmousedown="UI._lpStart()" onmouseup="UI._lpCancel()" onmouseleave="UI._lpCancel()"
+           ontouchstart="event.stopPropagation();UI._lpStart()" ontouchend="UI._lpCancel()" ontouchmove="UI._lpCancel()">
         ${bg}
         <button class="home-side-btn" onclick="event.stopPropagation();UI.openMine()">
           <span class="hsb-icon">⛏️</span>
@@ -418,7 +437,7 @@ const UI = {
         <div class="home-av-info">
           <div class="home-av-name">${avatar.name}</div>
           <div class="home-av-rar" style="color:${rc}">${rar.name}</div>
-          <div class="home-av-hint">Doppeltippen zum Ändern</div>
+          <div class="home-av-hint">Doppeltippen oder 2 Sek. halten zum Ändern</div>
         </div>
       </div>`;
   },
@@ -530,6 +549,15 @@ const UI = {
     return `
       <div class="panel">
         <div class="mode-bar"><button class="btn ghost sm" onclick="Game.backToModes()">← Modus</button></div>
+        <div class="team-box inline">
+          <div class="tb-inner">
+            <div class="team-slots">${slots}</div>
+            <div class="tb-actions">
+              <button class="btn ghost" onclick="Game.clearTeam()" ${s.team.length ? "" : "disabled"} title="Team leeren">✕</button>
+              <button class="btn" onclick="Game.confirmTeam()" ${s.team.length >= 1 ? "" : "disabled"}>Weiter ▶</button>
+            </div>
+          </div>
+        </div>
         <h2>🏟️ Stage — Team wählen</h2>
         <div class="tsel-autofill">
           <span class="tsel-autofill-label">Schnellauswahl:</span>
@@ -537,16 +565,6 @@ const UI = {
           <button class="btn sm good" onclick="Game.autoFillTeam('def')">🛡️ Bestes DEF-Team</button>
         </div>
         <div class="tsel-list">${rows || '<div class="hint">Noch keine Monster.</div>'}</div>
-      </div>
-      <div class="tb-spacer"></div>
-      <div class="team-box">
-        <div class="tb-inner">
-          <div class="team-slots">${slots}</div>
-          <div class="tb-actions">
-            <button class="btn ghost" onclick="Game.clearTeam()" ${s.team.length ? "" : "disabled"} title="Team leeren">✕</button>
-            <button class="btn" onclick="Game.confirmTeam()" ${s.team.length >= 1 ? "" : "disabled"}>Weiter ▶</button>
-          </div>
-        </div>
       </div>`;
   },
 
@@ -635,7 +653,7 @@ const UI = {
     if (!el || amount == null) return;
     const d = document.createElement("div");
     d.className = "dmg-float " + (kind || "");
-    d.textContent = "-" + Math.round(amount).toLocaleString("de-DE");
+    d.textContent = Math.round(amount).toLocaleString("de-DE");
     el.appendChild(d);
     setTimeout(() => d.remove(), 850);
   },
@@ -1061,33 +1079,47 @@ const UI = {
         if (p2) setTimeout(() => p2.classList.add("appearing"), 10);
       }, 960);
     } else {
-      // Multi: gruppierte Liste
-      const map = new Map();
-      for (const m of monsters) {
-        const key = `${m.name}|${m.rarity}`;
-        if (map.has(key)) map.get(key).count++;
-        else map.set(key, { m, count: 1 });
-      }
-      const grouped = [...map.values()].sort((a, b) =>
-        (DATA.rarities[b.m.rarity]?.order ?? 0) - (DATA.rarities[a.m.rarity]?.order ?? 0));
-      const rows = grouped.map(({ m, count }) => {
-        const rc = UI.rarColor(m.rarity);
-        return `<div class="erl-row">
-          <span class="erl-emoji">${m.emoji}</span>
-          <div class="erl-info">
-            <span class="erl-name" style="color:${rc}">${m.name}</span>
-            <span class="erl-rar" style="color:${rc}">${DATA.rarities[m.rarity].name}</span>
-          </div>
-          <span class="erl-count">×${count}</span>
-        </div>`;
-      }).join("");
-      UI.modal(`
-        <div class="egg-multi-reveal">
+      // Multi: erst Ei-Crack-Animation, dann gruppierte Liste
+      const buildList = () => {
+        const map = new Map();
+        for (const m of monsters) {
+          const key = `${m.name}|${m.rarity}`;
+          if (map.has(key)) map.get(key).count++;
+          else map.set(key, { m, count: 1 });
+        }
+        const grouped = [...map.values()].sort((a, b) =>
+          (DATA.rarities[b.m.rarity]?.order ?? 0) - (DATA.rarities[a.m.rarity]?.order ?? 0));
+        const rows = grouped.map(({ m, count }) => {
+          const rc = UI.rarColor(m.rarity);
+          return `<div class="erl-row">
+            <span class="erl-emoji">${m.emoji}</span>
+            <div class="erl-info">
+              <span class="erl-name" style="color:${rc}">${m.name}</span>
+              <span class="erl-rar" style="color:${rc}">${DATA.rarities[m.rarity].name}</span>
+            </div>
+            <span class="erl-count">×${count}</span>
+          </div>`;
+        }).join("");
+        return `
           <div style="font-size:26px;margin-bottom:2px">${eggType.emoji} ×${monsters.length}</div>
           <h3 style="margin:0 0 10px;font-size:15px">${eggType.name}</h3>
           <div class="egg-result-list">${rows}</div>
-          <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Super! 🎉</button>
-        </div>`);
+          <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Super! 🎉</button>`;
+      };
+      UI.modal(`
+        <div class="egg-reveal single" id="multi-wrap">
+          <div class="egg-phase1" id="ep1">
+            <div class="reveal-egg-emoji">${eggType.emoji}</div>
+          </div>
+        </div>`, false);
+      setTimeout(() => {
+        const p1 = document.getElementById("ep1");
+        if (p1) p1.classList.add("cracking");
+      }, 120);
+      setTimeout(() => {
+        const wrap = document.getElementById("multi-wrap");
+        if (wrap) { wrap.className = "egg-multi-reveal"; wrap.innerHTML = buildList(); }
+      }, 960);
     }
   },
 

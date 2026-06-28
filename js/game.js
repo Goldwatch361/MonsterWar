@@ -150,7 +150,7 @@ const Game = {
   // Navigation zurück
   backToModes() { Battle.mode = null; Battle.wbClearTimers(); UI.kampfView = "modes"; UI.render(); },
   backToTeam() { Battle.mode = null; UI.kampfView = "team"; UI.render(); },
-  backToStageSelect() { Battle.mode = null; UI.kampfView = "stageSelect"; UI.render(); },
+  backToStageSelect() { Battle.mode = null; UI.kampfView = "team"; UI.render(); },
 
   findMonster(id) {
     return Game.state.collection.find(m => m.id === id);
