@@ -48,7 +48,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
 html, body { height: 100%; }
 body {
-  font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+  font-family: "Segoe UI Emoji", "Segoe UI", Roboto, system-ui, sans-serif;
   background: radial-gradient(1200px 600px at 50% -10%, #1b2030 0%, var(--bg) 60%);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -106,6 +106,8 @@ body {
   flex: 1;
   padding: 14px;
   display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .panel {
   background: var(--panel);
@@ -338,6 +340,7 @@ body {
 .sc-rates { display: flex; flex-wrap: wrap; gap: 4px; margin: 9px 0; }
 .rate-chip { font-size: 10px; font-weight: 700; padding: 1px 6px; border: 1px solid; border-radius: 999px; }
 .sc-lock { text-align: center; color: var(--muted); font-size: 13px; padding: 6px; }
+.sc-stock-label { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--gold); }
 .summon-btns { display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 6px; }
 .summon-btns .btn { width: 100%; }
 
