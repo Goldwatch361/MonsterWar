@@ -415,6 +415,14 @@ body {
 .egg-mini-emoji { font-size: 26px; }
 .egg-mini-rar   { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
 
+.egg-result-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; max-height: 55vh; overflow-y: auto; min-width: 240px; }
+.erl-row { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.05); border-radius: 8px; padding: 7px 10px; }
+.erl-emoji { font-size: 26px; line-height: 1; flex-shrink: 0; }
+.erl-info  { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.erl-name  { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.erl-rar   { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; opacity: .85; }
+.erl-count { font-size: 16px; font-weight: 800; color: var(--text); flex-shrink: 0; }
+
 /* Stage-Auswahl als Raster + Frontier-Hervorhebung */
 .stage-select.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); overflow: visible; }
 .stage-chip.frontier { border-color: var(--gold); box-shadow: 0 0 13px -2px var(--gold); }
@@ -703,21 +711,52 @@ button { font-family: inherit; cursor: pointer; }
   0%, 100% { transform: translateY(0); }
   50%       { transform: translateY(-18px); }
 }
-/* Emoji-Container: weicher Farb-Glow, kein harter Kreis */
+/* Emoji-Container: kein box-shadow/border — alle glow-Klassen deaktiviert */
 .home-av-float {
   position: relative; display: flex; align-items: center; justify-content: center;
   width: 240px; height: 240px;
+  animation: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 .home-av-float::before {
   content: ""; position: absolute;
   width: 260px; height: 260px;
   background: radial-gradient(circle, var(--rcolor, #7c5cff) 0%, transparent 68%);
-  opacity: .5; pointer-events: none;
+  opacity: .45; pointer-events: none;
 }
 .home-av-emoji {
   font-size: 160px; line-height: 1; position: relative; z-index: 1;
   animation: homeFloat 3.2s ease-in-out infinite;
   filter: drop-shadow(0 0 28px var(--rcolor, #7c5cff)) drop-shadow(0 4px 12px rgba(0,0,0,.4));
+}
+/* Rang-Glow nur als drop-shadow auf dem Emoji (kein box-shadow auf dem Container) */
+.home-av-float.glow-strong .home-av-emoji {
+  animation: homeFloat 3.2s ease-in-out infinite, homeGlowPulse 1.9s ease-in-out infinite;
+}
+.home-av-float.glow-ultra .home-av-emoji {
+  animation: homeFloat 3.2s ease-in-out infinite, homeGlowUltra 1.4s ease-in-out infinite;
+}
+.home-av-float.glow-prismatic .home-av-emoji {
+  animation: homeFloat 3.2s ease-in-out infinite, homeGlowPrismatic 1.8s linear infinite;
+}
+@keyframes homeGlowPulse {
+  0%, 100% { filter: drop-shadow(0 0 24px var(--rcolor)) drop-shadow(0 4px 12px rgba(0,0,0,.4)); }
+  50%       { filter: drop-shadow(0 0 60px var(--rcolor)) drop-shadow(0 0 28px var(--rcolor)); }
+}
+@keyframes homeGlowUltra {
+  0%, 100% { filter: drop-shadow(0 0 40px var(--rcolor)) drop-shadow(0 0 80px var(--rcolor)) drop-shadow(0 4px 12px rgba(0,0,0,.4)); }
+  50%       { filter: drop-shadow(0 0 70px var(--rcolor)) drop-shadow(0 0 120px var(--rcolor)); }
+}
+@keyframes homeGlowPrismatic {
+  0%   { filter: drop-shadow(0 0 50px #ff0080) drop-shadow(0 0 90px #ff0080); }
+  14%  { filter: drop-shadow(0 0 50px #ff6600) drop-shadow(0 0 90px #ff6600); }
+  28%  { filter: drop-shadow(0 0 50px #ffee00) drop-shadow(0 0 90px #ffee00); }
+  42%  { filter: drop-shadow(0 0 50px #00ff66) drop-shadow(0 0 90px #00ff66); }
+  57%  { filter: drop-shadow(0 0 50px #00ddff) drop-shadow(0 0 90px #00ddff); }
+  71%  { filter: drop-shadow(0 0 50px #6644ff) drop-shadow(0 0 90px #6644ff); }
+  85%  { filter: drop-shadow(0 0 50px #ff00cc) drop-shadow(0 0 90px #ff00cc); }
+  100% { filter: drop-shadow(0 0 50px #ff0080) drop-shadow(0 0 90px #ff0080); }
 }
 .home-av-name {
   font-size: 24px; font-weight: 800; margin-top: 14px; color: #fff;
@@ -732,6 +771,48 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 11px; color: rgba(255,255,255,.7); margin-top: 12px;
   text-shadow: 0 1px 3px rgba(0,0,0,.5);
 }
+
+/* ===== Mine ===== */
+.mine-buy, .mine-owned { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 4px; }
+.mine-big-icon { font-size: 80px; line-height: 1; }
+.mine-ready-pulse { animation: mineReadyPop 0.9s ease-in-out infinite; }
+@keyframes mineReadyPop {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.12); }
+}
+.mine-desc { color: var(--muted); font-size: 14px; text-align: center; max-width: 280px; }
+.mine-cd-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.mine-bar {
+  width: 100%; max-width: 320px; height: 18px; border-radius: 999px;
+  background: #0c0e15; border: 1px solid var(--line); overflow: hidden;
+}
+.mine-prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e65100, #ffcc02);
+  transition: width 0.1s linear;
+}
+.mine-countdown {
+  font-size: 36px; font-weight: 800; color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.mine-cd-ready { color: var(--good); }
+.mine-collect-btn { max-width: 220px; width: 100%; margin-top: 4px; }
+.mine-info { font-size: 12px; color: var(--muted); }
+
+/* Side-Buttons auf dem Home-Bildschirm (Mine, etc.) */
+.home-side-btn {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: rgba(0,0,0,.38); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.18); border-radius: 14px;
+  padding: 12px 10px; color: #fff; cursor: pointer;
+  transition: background .15s, transform .08s;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+.home-side-btn:hover  { background: rgba(0,0,0,.55); }
+.home-side-btn:active { transform: translateY(-50%) scale(.93); }
+.hsb-icon  { font-size: 28px; line-height: 1; }
+.hsb-label { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; opacity: .85; }
 
 /* Avatar Picker Modal */
 .av-pick-grid {
@@ -793,3 +874,171 @@ button { font-family: inherit; cursor: pointer; }
 #modal-box .emoji-xl { font-size: 64px; margin: 6px 0; }
 
 .hidden { display: none !important; }
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 480px) {
+
+  /* --- Topbar: immer eine Zeile für Resources --- */
+  #topbar { padding: 5px 8px; gap: 3px; }
+  .brand { display: none; }
+  .resources { flex-wrap: nowrap; gap: 3px; }
+  .res { padding: 2px 5px; font-size: 10px; flex-shrink: 1; min-width: 0; white-space: nowrap; }
+  .xp-strip { gap: 5px; }
+  .xp-lvl { font-size: 10px; }
+  .xp-strip-bar { height: 10px; }
+  .xp-strip-bar > .txt { font-size: 8px; }
+
+  /* --- App-Layout --- */
+  #app { padding-bottom: 68px; }
+  #view { padding: 8px; gap: 8px; }
+  .panel { padding: 10px; border-radius: 10px; }
+  .panel h2 { font-size: 12px; }
+
+  /* --- Tabbar --- */
+  #tabbar .tab { font-size: 19px; padding: 7px 2px 10px; }
+  #tabbar .tab span { font-size: 9px; }
+
+  /* --- Buttons --- */
+  .btn { font-size: 13px; padding: 9px 10px; border-radius: 8px; }
+  .btn.sm { font-size: 11px; padding: 5px 7px; }
+  .btn-row { gap: 6px; }
+
+  /* --- Modal --- */
+  #modal { padding: 10px; }
+  #modal-box { padding: 16px; border-radius: 12px; max-height: 85dvh; overflow-y: auto; }
+  #modal-box h2 { font-size: 17px; }
+  #modal-box p { font-size: 13px; }
+  #modal-box .emoji-xl { font-size: 50px; }
+
+  /* --- Toasts --- */
+  #toasts { bottom: 72px; }
+  .toast { font-size: 12px; padding: 7px 12px; }
+
+  /* --- Panels / Sections --- */
+  .section-title { font-size: 11px; }
+  .hint { font-size: 12px; padding: 12px; }
+  .kv { font-size: 12px; }
+
+  /* --- Battle / Arena --- */
+  .arena { min-height: 170px; gap: 6px; }
+  .enemy-emoji { font-size: 56px !important; }
+  .enemy-fighter.boss .enemy-emoji { font-size: 68px !important; }
+  .enemy-name { font-size: 14px; margin-top: 4px; }
+  .enemy-sub { font-size: 11px; }
+  .hpbar { height: 14px; margin-top: 7px; }
+  .hpbar > .txt { font-size: 9px; }
+  .hpbar.small { height: 7px; }
+  .auto-note { font-size: 11px; }
+  .dmg-float { font-size: 22px; }
+  .dmg-float.dmg-gold { font-size: 15px; }
+  .dmg-float.dmg-xp   { font-size: 14px; }
+
+  /* --- Fighter cards --- */
+  .fighter { padding: 5px 6px; gap: 6px; }
+  .fighter .f-emoji { font-size: 24px; }
+  .fighter .f-name { font-size: 11px; }
+  .fighter .f-hp { font-size: 9px; }
+
+  /* --- Stage --- */
+  .stage-now { font-size: 15px; }
+  .wave-dot { width: 24px; height: 24px; font-size: 10px; }
+  .wave-track { gap: 5px; }
+  .stage-tile { border-radius: 8px; }
+  .stage-tile .st-num { font-size: 14px; }
+  .stage-tile .st-stat { font-size: 9px; }
+
+  /* --- Modus-Cards --- */
+  .mode-grid { gap: 8px; }
+  .mode-card { padding: 12px 10px; gap: 4px; border-radius: 10px; }
+  .mode-card .mc-emoji { font-size: 34px; }
+  .mode-card .mc-name { font-size: 14px; }
+  .mode-card .mc-desc { font-size: 11px; min-height: unset; }
+  .mode-card .mc-info { font-size: 10px; }
+  .mode-card .mc-go { padding: 6px 12px; font-size: 13px; }
+  .mode-bar { gap: 6px; margin-bottom: 8px; }
+
+  /* --- Monster Karten --- */
+  .team-grid, .coll-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 7px; }
+  .mon { padding: 8px; border-radius: 9px; }
+  .mon .memoji { font-size: 26px; }
+  .mon .mname { font-size: 12px; }
+  .mon .mmeta { font-size: 10px; }
+  .stats { font-size: 11px; gap: 5px; margin-top: 6px; }
+  .xpbar { margin-top: 6px; }
+  .count-badge { font-size: 10px; padding: 1px 6px; }
+
+  /* --- Teamauswahl --- */
+  .tsel-row { padding: 9px 10px; gap: 8px; border-radius: 10px; }
+  .tsr-emoji { font-size: 26px; width: 30px; }
+  .tsr-name { font-size: 13px; }
+  .tsr-rar { font-size: 10px; }
+  .tsr-stats { font-size: 11px; }
+  .tsel-autofill .btn { font-size: 9px; }
+
+  /* --- Team-Box (fixed) --- */
+  .team-box { bottom: 68px; padding: 6px 8px; width: calc(100% - 12px); border-radius: 10px; }
+  .team-slot { width: 44px; height: 44px; border-radius: 8px; }
+  .team-slot.filled .ts-emoji { font-size: 22px; }
+  .tb-spacer { height: 82px; }
+
+  /* --- Subtabs --- */
+  .subtabs { padding: 4px; }
+  .subtab { font-size: 11px; padding: 7px; border-radius: 6px; }
+
+  /* --- Rang-Köpfe (Fusion) --- */
+  .rank-head { padding: 9px 10px; }
+  .rank-head .rh-name { font-size: 12px; }
+  .rank-head .rh-info { font-size: 11px; }
+
+  /* --- Summon --- */
+  .summon-grid { grid-template-columns: 1fr; }
+  .sc-emoji { font-size: 26px; }
+  .sc-name { font-size: 13px; }
+  .sc-cost { font-size: 11px; }
+  .summon-btns { gap: 5px; }
+  .summon-btns .btn { font-size: 11px; }
+  .egg-stock-row { font-size: 11px; }
+
+  /* --- Ei-Reveal --- */
+  .reveal-egg-emoji { font-size: 68px; }
+  .reveal-mon-emoji { font-size: 58px; }
+  .reveal-mon-name  { font-size: 17px; }
+  .egg-result-list  { min-width: unset; }
+  .erl-emoji { font-size: 22px; }
+  .erl-name  { font-size: 12px; }
+  .erl-count { font-size: 14px; }
+
+  /* --- WorldBoss --- */
+  .wb-team { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 4px; }
+
+  /* --- Home Avatar --- */
+  .home-avatar-wrap { height: calc(100dvh - 90px); }
+  .home-av-float { width: 160px; height: 160px; }
+  .home-av-float::before { width: 180px; height: 180px; }
+  .home-av-emoji { font-size: 110px; }
+  .home-av-name { font-size: 18px; margin-top: 10px; }
+  .home-av-rar  { font-size: 11px; }
+  .home-av-hint { font-size: 10px; margin-top: 8px; }
+  .hsb-icon  { font-size: 22px; }
+  .hsb-label { font-size: 9px; }
+
+  /* --- Mine --- */
+  .mine-big-icon  { font-size: 60px; }
+  .mine-countdown { font-size: 28px; }
+  .mine-bar       { max-width: 100%; }
+  .mine-collect-btn { max-width: 100%; }
+  .mine-desc { font-size: 13px; }
+}
+
+/* --- Sehr kleine Bildschirme (≤ 360px) --- */
+@media (max-width: 360px) {
+  .res { padding: 1px 4px; font-size: 9px; }
+  .home-av-float { width: 130px; height: 130px; }
+  .home-av-float::before { width: 150px; height: 150px; }
+  .home-av-emoji { font-size: 90px; }
+  .home-av-name  { font-size: 15px; }
+  .mode-card .mc-emoji { font-size: 28px; }
+  .mode-card .mc-name  { font-size: 13px; }
+  .team-slot { width: 38px; height: 38px; }
+  .team-slot.filled .ts-emoji { font-size: 18px; }
+}
