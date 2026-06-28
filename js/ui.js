@@ -905,10 +905,10 @@ const UI = {
                  <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 10)" ${maxN >= 10 ? "" : "disabled"}>×10</button>
                  <button class="btn sm good" onclick="Game.buyAndCrack('${egg.id}', 'max')" ${maxN >= 1 ? "" : "disabled"}>Max ${maxN || 0}</button>
                </div>
-               ${cnt > 0 ? `<div class="egg-stock-row">
-                 <span>Im Vorrat: ${cnt}</span>
+               ${cnt > 0 ? `<div class="summon-btns" style="margin-top:5px">
+                 <span class="sc-stock-label">🥚 ×${cnt}</span>
                  <button class="btn sm" onclick="Game.crackDroppedEgg('${egg.id}', 1)">×1 Öffnen</button>
-                 ${cnt > 1 ? `<button class="btn sm good" onclick="Game.crackDroppedEgg('${egg.id}', 'max')">Alle ×${cnt}</button>` : ""}
+                 <button class="btn sm good" onclick="Game.crackDroppedEgg('${egg.id}', 'max')" ${cnt < 2 ? "disabled" : ""}>Alle ×${cnt}</button>
                </div>` : ""}`}
         </div>`;
     }).join("");

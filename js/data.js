@@ -96,7 +96,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "premium", name: "Premium-Ei", emoji: "✨🥚", currency: "gold", cost: 1500, minLevel: 5,
+    id: "premium", name: "Premium-Ei", emoji: "✨", currency: "gold", cost: 1500, minLevel: 5,
     dropMinLevel: 5, dropWeight: 6,
     table: [
       { rarity: "selten", chance: 0.60 }, { rarity: "episch", chance: 0.30 },
@@ -104,7 +104,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "elite", name: "Elite-Ei", emoji: "💎🥚", currency: "crystals", cost: 60, minLevel: 12,
+    id: "elite", name: "Elite-Ei", emoji: "💎", currency: "crystals", cost: 60, minLevel: 12,
     dropMinLevel: 15, dropWeight: 4,
     table: [
       { rarity: "episch", chance: 0.65 }, { rarity: "legendaer", chance: 0.30 },
@@ -112,7 +112,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "mythic", name: "Mythisch-Ei", emoji: "🌌🥚", currency: "gold", cost: 10000, minLevel: 20,
+    id: "mythic", name: "Mythisch-Ei", emoji: "🌌", currency: "gold", cost: 10000, minLevel: 20,
     dropMinLevel: 30, dropWeight: 3,
     table: [
       { rarity: "legendaer", chance: 0.60 }, { rarity: "mythisch", chance: 0.35 },
@@ -120,7 +120,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "divine", name: "Göttlich-Ei", emoji: "👼🥚", currency: "gold", cost: 80000, minLevel: 30,
+    id: "divine", name: "Göttlich-Ei", emoji: "👼", currency: "gold", cost: 80000, minLevel: 30,
     dropMinLevel: 50, dropWeight: 2,
     table: [
       { rarity: "mythisch", chance: 0.55 }, { rarity: "goettlich", chance: 0.35 },
@@ -128,7 +128,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "cosmic", name: "Kosmisch-Ei", emoji: "🪐🥚", currency: "crystals", cost: 500, minLevel: 45,
+    id: "cosmic", name: "Kosmisch-Ei", emoji: "🪐", currency: "crystals", cost: 500, minLevel: 45,
     dropMinLevel: 65, dropWeight: 1,
     table: [
       { rarity: "goettlich", chance: 0.50 }, { rarity: "uralt", chance: 0.35 },
@@ -136,7 +136,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "transcend", name: "Transzendenz-Ei", emoji: "🌠🥚", currency: "gold", cost: 1500000, minLevel: 60,
+    id: "transcend", name: "Transzendenz-Ei", emoji: "🌠", currency: "gold", cost: 1500000, minLevel: 60,
     // Kein Drop (nur kaufbar)
     table: [
       { rarity: "uralt", chance: 0.40 }, { rarity: "kosmisch", chance: 0.30 },
