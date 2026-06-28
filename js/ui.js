@@ -423,15 +423,15 @@ const UI = {
   <path d="M374,403 L380,375 L386,403Z" fill="#122a08"/>
 </svg>`;
     return `
-      <div class="home-avatar-wrap"
-           onmousedown="UI._lpStart()" onmouseup="UI._lpCancel()" onmouseleave="UI._lpCancel()"
-           ontouchstart="event.stopPropagation();UI._lpStart()" ontouchend="UI._lpCancel()" ontouchmove="UI._lpCancel()">
+      <div class="home-avatar-wrap">
         ${bg}
-        <button class="home-side-btn" onclick="event.stopPropagation();UI.openMine()">
+        <button class="home-side-btn" onclick="UI.openMine()">
           <span class="hsb-icon">⛏️</span>
           <span class="hsb-label">Mine</span>
         </button>
-        <div class="home-av-float ${UI.glowClass(avatar.rarity)}" style="--rcolor:${rc}">
+        <div class="home-av-float ${UI.glowClass(avatar.rarity)}" style="--rcolor:${rc}"
+             onmousedown="UI._lpStart()" onmouseup="UI._lpCancel()" onmouseleave="UI._lpCancel()"
+             ontouchstart="UI._lpStart()" ontouchend="UI._lpCancel()" ontouchmove="UI._lpCancel()">
           <div class="home-av-emoji">${avatar.emoji}</div>
         </div>
         <div class="home-av-info">
