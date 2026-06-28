@@ -114,6 +114,12 @@ const UI = {
     const pct = Math.max(0, Math.min(100, ((s.playerExp || 0) / need) * 100));
     document.getElementById("pxp-fill").style.width = pct + "%";
     document.getElementById("pxp-txt").textContent = `${Math.floor(s.playerExp || 0)} / ${need} XP`;
+    const fBadge = document.getElementById("summon-fuse-badge");
+    if (fBadge) {
+      const n = Game.possibleFusions();
+      fBadge.textContent = n > 99 ? "99+" : n;
+      fBadge.style.display = n > 0 ? "" : "none";
+    }
   },
 
   // Stage-Kämpfer: mit eigener HP-Leiste
@@ -439,6 +445,7 @@ const UI = {
           <div class="home-av-rar" style="color:${rc}">${rar.name}</div>
           <div class="home-av-hint">Doppeltippen oder 2 Sek. halten zum Ändern</div>
         </div>
+        <div class="home-version">v${Game.VERSION}</div>
       </div>`;
   },
 

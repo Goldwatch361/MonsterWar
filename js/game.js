@@ -2,6 +2,7 @@
 const Game = {
   state: null,
   MAX_TEAM: 5,
+  VERSION: "0.83",
 
   /* Frischer Startzustand (Erststart) */
   newGame() {
@@ -319,6 +320,11 @@ const Game = {
       return a.name.localeCompare(b.name);
     });
     return groups;
+  },
+
+  /* Anzahl möglicher Fusionen über alle Gruppen */
+  possibleFusions() {
+    return Game.collectionGroups().reduce((s, g) => s + Math.floor(g.count / 2), 0);
   },
 
   /* Gold-Kosten für eine Fusion (Ergebnis-Rang entscheidet) */
