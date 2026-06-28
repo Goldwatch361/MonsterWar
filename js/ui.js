@@ -9,6 +9,7 @@ const UI = {
   collOpen: {},         // Rang-Spoiler im Sammlung-Reiter
   dexOpen: {},          // Rang-Spoiler im Dex-Reiter
   monsterTab: "collection", // Unter-Reiter: collection | dex | fusion
+  dashView: "avatar",  // avatar | mine
 
   init() {
     document.querySelectorAll("#tabbar .tab").forEach(btn => {
@@ -75,11 +76,18 @@ const UI = {
 
   /* ---- Haupt-Render pro Tab (scroll-erhaltend → nahtlos) ---- */
   render() {
+    // Mine-Timer stoppen wenn Mine-View verlassen wird
+    if (UI._mineTimer && UI.dashView !== "mine") {
+      clearInterval(UI._mineTimer); UI._mineTimer = null;
+    }
     UI.updateTopbar();
     const view = document.getElementById("view");
     const sy = window.scrollY; // Scroll-Position merken, damit nichts springt
     switch (UI.current) {
-      case "dashboard": view.innerHTML = UI.renderDashboard(); break;
+      case "dashboard":
+        view.innerHTML = UI.renderDashboard();
+        if (UI.dashView === "mine" && Game.state.mine?.owned) UI._startMineTimer();
+        break;
       case "home":      view.innerHTML = UI.renderHome();    UI.refresh(); break;
       case "monster":   view.innerHTML = UI.renderMonster(); break;
       case "summon":    view.innerHTML = UI.renderSummon();  break;
@@ -221,7 +229,101 @@ const UI = {
       </div>`;
   },
 
+  _mineTimer: null,
+
+  openMine() {
+    UI.dashView = "mine";
+    UI.render();
+  },
+
+  _startMineTimer() {
+    if (UI._mineTimer) clearInterval(UI._mineTimer);
+    UI._mineTimer = setInterval(() => {
+      const el = document.getElementById("mine-countdown");
+      if (!el) { clearInterval(UI._mineTimer); UI._mineTimer = null; return; }
+      const cd = UI._mineCd();
+      const fill = document.getElementById("mine-prog-fill");
+      const btn  = document.getElementById("mine-collect-btn");
+      const icon = document.getElementById("mine-icon");
+      if (cd.ready) {
+        el.textContent = cd.text;
+        el.className = "mine-countdown mine-cd-ready";
+        if (fill) fill.style.width = cd.pct + "%";
+        if (btn)  { btn.disabled = false; btn.textContent = `🥚 Abholen (${cd.eggsReady}×)`; }
+        if (icon) icon.classList.add("mine-ready-pulse");
+      } else {
+        el.textContent = cd.text;
+        el.className = "mine-countdown";
+        if (fill) fill.style.width = cd.pct + "%";
+        if (btn)  { btn.disabled = true; btn.textContent = "🥚 Abholen"; }
+        if (icon) icon.classList.remove("mine-ready-pulse");
+      }
+    }, 100);
+  },
+
+  _mineCd() {
+    const s = Game.state;
+    const elapsed = Date.now() - (s.mine?.lastCollect || 0);
+    const total = Game.MINE_COOLDOWN_MS;
+    const eggsReady = Math.floor(elapsed / total);
+    const ready = eggsReady > 0;
+    // Fortschritt innerhalb des aktuellen Zyklus
+    const cycleElapsed = elapsed % total;
+    const pct = (cycleElapsed / total) * 100;
+    const remaining = total - cycleElapsed;
+    const m = Math.floor(remaining / 60000);
+    const sec = Math.floor((remaining % 60000) / 1000);
+    return { ready, eggsReady, pct, text: `${m}:${String(sec).padStart(2, "0")}` };
+  },
+
+  renderMine() {
+    const s = Game.state;
+    const canAfford = s.gold >= Game.MINE_COST;
+    if (!s.mine.owned) {
+      return `
+        <div class="panel">
+          <div class="mode-bar">
+            <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
+          </div>
+          <h2>⛏️ Mine</h2>
+          <div class="mine-buy">
+            <div class="mine-big-icon">⛏️</div>
+            <p class="mine-desc">Schürft automatisch alle <b>10 Minuten</b> ein Standard-Ei — auch wenn du nicht spielst.</p>
+            <button class="btn good" onclick="Game.buyMine()" ${canAfford ? "" : "disabled"}>
+              Kaufen — ${Game.MINE_COST.toLocaleString("de-DE")} 💰
+            </button>
+            ${!canAfford ? `<div class="hint" style="margin-top:8px">Noch ${(Game.MINE_COST - Math.floor(s.gold)).toLocaleString("de-DE")} 💰 fehlen</div>` : ""}
+          </div>
+        </div>`;
+    }
+    const cd = UI._mineCd();
+    return `
+      <div class="panel">
+        <div class="mode-bar">
+          <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
+        </div>
+        <h2>⛏️ Mine</h2>
+        <div class="mine-owned">
+          <div class="mine-big-icon ${cd.ready ? "mine-ready-pulse" : ""}" id="mine-icon">⛏️</div>
+          <div class="mine-cd-label">${cd.ready ? `${cd.eggsReady} Ei${cd.eggsReady > 1 ? "er" : ""} bereit!` : "Nächstes Ei in"}</div>
+          <div class="mine-bar">
+            <div class="mine-prog-fill" id="mine-prog-fill" style="width:${cd.pct}%"></div>
+          </div>
+          <div class="mine-countdown ${cd.ready ? "mine-cd-ready" : ""}" id="mine-countdown">
+            ${cd.text}
+          </div>
+          <button class="btn good mine-collect-btn" id="mine-collect-btn"
+                  onclick="Game.mineCollect()" ${cd.ready ? "" : "disabled"}>
+            🥚 Abholen${cd.ready ? ` (${cd.eggsReady}×)` : ""}
+          </button>
+          <div class="mine-info">Standard-Ei · alle 10 Minuten</div>
+        </div>
+      </div>`;
+  },
+
   renderDashboard() {
+    if (UI.dashView === "mine") return UI.renderMine();
+    if (UI._mineTimer) { clearInterval(UI._mineTimer); UI._mineTimer = null; }
     const s = Game.state;
     const avatar = s.collection.find(m => m.id === s.avatarMonsterId) || s.collection[0] || null;
     if (!avatar) return `<div class="home-avatar-wrap"><svg class="home-bg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice"><rect width="400" height="700" fill="#64b5f6"/></svg><div class="hint" style="position:relative;z-index:1;text-align:center;padding:40px 0">Noch keine Monster — beschwöre dein erstes!</div></div>`;
@@ -293,6 +395,10 @@ const UI = {
     return `
       <div class="home-avatar-wrap" ondblclick="UI.openAvatarPicker()">
         ${bg}
+        <button class="home-side-btn" onclick="event.stopPropagation();UI.openMine()">
+          <span class="hsb-icon">⛏️</span>
+          <span class="hsb-label">Mine</span>
+        </button>
         <div class="home-av-float ${UI.glowClass(avatar.rarity)}" style="--rcolor:${rc}">
           <div class="home-av-emoji">${avatar.emoji}</div>
         </div>
@@ -942,19 +1048,31 @@ const UI = {
         if (p2) setTimeout(() => p2.classList.add("appearing"), 10);
       }, 960);
     } else {
-      // Multi: Karten-Raster
-      const cards = monsters.map(m => {
+      // Multi: gruppierte Liste
+      const map = new Map();
+      for (const m of monsters) {
+        const key = `${m.name}|${m.rarity}`;
+        if (map.has(key)) map.get(key).count++;
+        else map.set(key, { m, count: 1 });
+      }
+      const grouped = [...map.values()].sort((a, b) =>
+        (DATA.rarities[b.m.rarity]?.order ?? 0) - (DATA.rarities[a.m.rarity]?.order ?? 0));
+      const rows = grouped.map(({ m, count }) => {
         const rc = UI.rarColor(m.rarity);
-        return `<div class="egg-mini-card" style="border-color:${rc}">
-          <div class="egg-mini-emoji">${m.emoji}</div>
-          <div class="egg-mini-rar" style="color:${rc}">${DATA.rarities[m.rarity].name.slice(0, 5)}</div>
+        return `<div class="erl-row">
+          <span class="erl-emoji">${m.emoji}</span>
+          <div class="erl-info">
+            <span class="erl-name" style="color:${rc}">${m.name}</span>
+            <span class="erl-rar" style="color:${rc}">${DATA.rarities[m.rarity].name}</span>
+          </div>
+          <span class="erl-count">×${count}</span>
         </div>`;
       }).join("");
       UI.modal(`
         <div class="egg-multi-reveal">
-          <div style="font-size:28px;margin-bottom:4px">${eggType.emoji} ×${monsters.length}</div>
-          <h3 style="margin:0 0 12px;font-size:16px">${eggType.name}</h3>
-          <div class="egg-mini-cards">${cards}</div>
+          <div style="font-size:26px;margin-bottom:2px">${eggType.emoji} ×${monsters.length}</div>
+          <h3 style="margin:0 0 10px;font-size:15px">${eggType.name}</h3>
+          <div class="egg-result-list">${rows}</div>
           <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Super! 🎉</button>
         </div>`);
     }
@@ -1001,17 +1119,4 @@ const UI = {
     `);
   },
 
-  showOffline(info) {
-    const h = Math.floor(info.capped / 3600);
-    const m = Math.floor((info.capped % 3600) / 60);
-    const timeStr = h > 0 ? `${h} Std ${m} Min` : `${m} Min`;
-    UI.modal(`
-      <div class="emoji-xl">💤</div>
-      <h2>Willkommen zurück!</h2>
-      <p>Du warst <b>${timeStr}</b> weg.</p>
-      <div class="reward-line">+${info.gold.toLocaleString("de-DE")} 💰</div>
-      <div class="reward-line">+${info.xp.toLocaleString("de-DE")} XP</div>
-      <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Einsammeln</button>
-    `);
-  },
 };

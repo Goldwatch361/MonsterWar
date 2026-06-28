@@ -46,23 +46,4 @@ const Save = {
     localStorage.removeItem(Save.KEY);
   },
 
-  /* Offline-Belohnung berechnen (gecappt auf 8h).
-     Basis: durchschnittliche Gold-/XP-Rate aus bisheriger Spielzeit. */
-  computeOffline(state) {
-    if (!state.lastSaveTime) return null;
-    let seconds = Math.floor((Date.now() - state.lastSaveTime) / 1000);
-    if (seconds < 60) return null; // unter 1 Minute lohnt sich kein Popup
-    const capped = Math.min(seconds, DATA.offlineCapSeconds);
-
-    const played = Math.max(30, state.playSeconds || 0);
-    const goldRate = (state.goldEarned || 0) / played; // Gold pro Sekunde
-    const xpRate = (state.xpEarned || 0) / played;
-
-    // 50% Effizienz im Idle-Offline-Modus, kleiner Fallback wenn noch keine Rate
-    const eff = 0.5;
-    const gold = Math.max(0, Math.round((goldRate * eff || DATA.enemyBase.reward / 20) * capped));
-    const xp = Math.max(0, Math.round((xpRate * eff || 1) * capped));
-
-    return { seconds, capped, gold, xp };
-  },
 };

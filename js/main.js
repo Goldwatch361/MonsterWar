@@ -5,15 +5,6 @@
     const firstStart = Game.init();
     UI.init();
 
-    // Offline-Fortschritt (nur wenn geladener Spielstand existierte)
-    if (!firstStart) {
-      const info = Save.computeOffline(Game.state);
-      if (info && (info.gold > 0 || info.xp > 0)) {
-        Game.state.gold += info.gold;
-        Game.addPlayerExp(info.xp); // Monster haben kein Level → Spieler-XP
-        UI.showOffline(info);
-      }
-    }
 
     UI.render();
 

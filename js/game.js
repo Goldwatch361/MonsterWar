@@ -15,6 +15,7 @@ const Game = {
       collection: [starter],
       inventory: { eggs: { standard: 0, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 }, crystals: 0 },
       avatarMonsterId: starter.id,
+      mine: { owned: false, lastCollect: 0 },
       enemy: null,
       stage: { current: 1, unlocked: 1, wave: 1, best: {} },
       worldBoss: { level: 1, best: 0 },
@@ -48,6 +49,8 @@ const Game = {
       // Avatar-Migration
       if (!Game.state.avatarMonsterId && Game.state.collection.length)
         Game.state.avatarMonsterId = Game.state.collection[0].id;
+      // Mine-Migration
+      if (!Game.state.mine) Game.state.mine = { owned: false, lastCollect: 0 };
       // Referenz-Integrität: Team-Einträge sollen auf Collection-Objekte zeigen
       Game.state.team = Game.state.team
         .map(tm => Game.state.collection.find(c => c.id === tm.id))
@@ -383,6 +386,40 @@ const Game = {
       made++; lastFused = fused;
     }
     if (made > 0) UI.toast(`⚛ ${made}× Fusion → ${lastFused.name} (${DATA.rarities[lastFused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    UI.render();
+  },
+
+  /* ---- Mine ---- */
+  MINE_COST: 10000,
+  MINE_COOLDOWN_MS: 10 * 1000, // 10 Sekunden
+
+  buyMine() {
+    const s = Game.state;
+    if (s.mine.owned) return;
+    if (s.gold < Game.MINE_COST) { UI.toast("Nicht genug Gold! 💰", "bad"); return; }
+    s.gold -= Game.MINE_COST;
+    s.mine.owned = true;
+    s.mine.lastCollect = Date.now();
+    UI.toast("⛏️ Mine gekauft!", "good");
+    UI.render();
+  },
+
+  mineEggsReady() {
+    const s = Game.state;
+    if (!s.mine?.owned) return 0;
+    return Math.floor((Date.now() - (s.mine.lastCollect || 0)) / Game.MINE_COOLDOWN_MS);
+  },
+
+  mineCollect() {
+    const s = Game.state;
+    const count = Game.mineEggsReady();
+    if (count < 1) { UI.toast("Mine noch nicht fertig!", "bad"); return; }
+    s.inventory.eggs.standard = (s.inventory.eggs.standard || 0) + count;
+    // Partielle Zeit des nächsten Zyklus erhalten
+    const elapsed = Date.now() - (s.mine.lastCollect || 0);
+    s.mine.lastCollect = Date.now() - (elapsed % Game.MINE_COOLDOWN_MS);
+    UI.toast(`⛏️ ${count}× Standard-Ei 🥚 abgeholt!`, "good");
+    UI.updateTopbar();
     UI.render();
   },
 
