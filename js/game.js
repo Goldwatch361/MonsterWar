@@ -15,7 +15,7 @@ const Game = {
       collection: [starter],
       inventory: { eggs: { standard: 0, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 }, crystals: 0 },
       avatarMonsterId: starter.id,
-      mine: { owned: false, lastCollect: 0 },
+      mines: { standard: { owned: false, lastCollect: 0 }, elite: { owned: false, lastCollect: 0 }, goettlich: { owned: false, lastCollect: 0 }, crystal: { owned: false, lastCollect: 0 } },
       enemy: null,
       stage: { current: 1, unlocked: 1, wave: 1, best: {} },
       worldBoss: { level: 1, best: 0 },
@@ -49,8 +49,20 @@ const Game = {
       // Avatar-Migration
       if (!Game.state.avatarMonsterId && Game.state.collection.length)
         Game.state.avatarMonsterId = Game.state.collection[0].id;
-      // Mine-Migration
-      if (!Game.state.mine) Game.state.mine = { owned: false, lastCollect: 0 };
+      // Mines-Migration: altes mine-Objekt → mines-Objekt
+      if (!Game.state.mines) {
+        Game.state.mines = {
+          standard: Game.state.mine || { owned: false, lastCollect: 0 },
+          elite:    { owned: false, lastCollect: 0 },
+          goettlich:{ owned: false, lastCollect: 0 },
+          crystal:  { owned: false, lastCollect: 0 },
+        };
+        delete Game.state.mine;
+      }
+      for (const m of Game.MINES) {
+        if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
+      }
+      if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
       // Referenz-Integrität: Team-Einträge sollen auf Collection-Objekte zeigen
       Game.state.team = Game.state.team
         .map(tm => Game.state.collection.find(c => c.id === tm.id))
@@ -389,36 +401,48 @@ const Game = {
     UI.render();
   },
 
-  /* ---- Mine ---- */
-  MINE_COST: 10000,
-  MINE_COOLDOWN_MS: 10 * 1000, // 10 Sekunden
+  /* ---- Minen ---- */
+  MINES: [
+    { id: "standard",  name: "Standard-Mine", emoji: "⛏️",  cost: 10_000,      cooldown: 10 * 60 * 1000, reward: { type: "egg",     id: "standard",  label: "Standard-Ei",  emoji: "🥚" }, color: "#9aa4bf" },
+    { id: "elite",     name: "Elite-Mine",     emoji: "🔮",  cost: 100_000,     cooldown: 15 * 60 * 1000, reward: { type: "egg",     id: "elite",     label: "Elite-Ei",     emoji: "🥚" }, color: "#4aa8ff" },
+    { id: "goettlich", name: "Götter-Mine",    emoji: "🌟",  cost: 500_000,     cooldown: 60 * 60 * 1000, reward: { type: "egg",     id: "goettlich", label: "Göttlich-Ei",  emoji: "🥚" }, color: "#ffe7a0" },
+    { id: "crystal",   name: "Kristall-Mine",  emoji: "💎",  cost: 1_000_000,   cooldown: 60 * 60 * 1000, reward: { type: "crystal",                  label: "Kristall",     emoji: "💎" }, color: "#00d3a7" },
+  ],
 
-  buyMine() {
+  buyMine(id) {
+    const cfg = Game.MINES.find(m => m.id === id);
+    if (!cfg) return;
     const s = Game.state;
-    if (s.mine.owned) return;
-    if (s.gold < Game.MINE_COST) { UI.toast("Nicht genug Gold! 💰", "bad"); return; }
-    s.gold -= Game.MINE_COST;
-    s.mine.owned = true;
-    s.mine.lastCollect = Date.now();
-    UI.toast("⛏️ Mine gekauft!", "good");
+    if (s.mines[id]?.owned) return;
+    if (s.gold < cfg.cost) { UI.toast("Nicht genug Gold! 💰", "bad"); return; }
+    s.gold -= cfg.cost;
+    s.mines[id] = { owned: true, lastCollect: Date.now() };
+    UI.toast(`${cfg.emoji} ${cfg.name} gekauft!`, "good");
+    UI.updateTopbar();
     UI.render();
   },
 
-  mineEggsReady() {
+  mineItemsReady(id) {
+    const cfg = Game.MINES.find(m => m.id === id);
     const s = Game.state;
-    if (!s.mine?.owned) return 0;
-    return Math.floor((Date.now() - (s.mine.lastCollect || 0)) / Game.MINE_COOLDOWN_MS);
+    if (!cfg || !s.mines?.[id]?.owned) return 0;
+    return Math.floor((Date.now() - (s.mines[id].lastCollect || 0)) / cfg.cooldown);
   },
 
-  mineCollect() {
+  mineCollect(id) {
+    const cfg = Game.MINES.find(m => m.id === id);
     const s = Game.state;
-    const count = Game.mineEggsReady();
+    const count = Game.mineItemsReady(id);
     if (count < 1) { UI.toast("Mine noch nicht fertig!", "bad"); return; }
-    s.inventory.eggs.standard = (s.inventory.eggs.standard || 0) + count;
-    // Partielle Zeit des nächsten Zyklus erhalten
-    const elapsed = Date.now() - (s.mine.lastCollect || 0);
-    s.mine.lastCollect = Date.now() - (elapsed % Game.MINE_COOLDOWN_MS);
-    UI.toast(`⛏️ ${count}× Standard-Ei 🥚 abgeholt!`, "good");
+    const elapsed = Date.now() - (s.mines[id].lastCollect || 0);
+    s.mines[id].lastCollect = Date.now() - (elapsed % cfg.cooldown);
+    const r = cfg.reward;
+    if (r.type === "crystal") {
+      s.inventory.crystals = (s.inventory.crystals || 0) + count;
+    } else {
+      s.inventory.eggs[r.id] = (s.inventory.eggs[r.id] || 0) + count;
+    }
+    UI.toast(`${cfg.emoji} ${count}× ${r.label} ${r.emoji} abgeholt!`, "good");
     UI.updateTopbar();
     UI.render();
   },

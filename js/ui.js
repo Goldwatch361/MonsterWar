@@ -86,7 +86,7 @@ const UI = {
     switch (UI.current) {
       case "dashboard":
         view.innerHTML = UI.renderDashboard();
-        if (UI.dashView === "mine" && Game.state.mine?.owned) UI._startMineTimer();
+        if (UI.dashView === "mine" && Game.MINES.some(m => Game.state.mines?.[m.id]?.owned)) UI._startMineTimer();
         break;
       case "home":      view.innerHTML = UI.renderHome();    UI.refresh(); break;
       case "monster":   view.innerHTML = UI.renderMonster(); break;
@@ -216,7 +216,6 @@ const UI = {
     return `
       <div class="arena">
         <div class="team-side" id="team-side">${teamInner}</div>
-        <div class="vs">⚔️</div>
         <div class="enemy-side">
           <div class="enemy-fighter ${wb ? "boss" : ""}" id="enemy-fighter">
             <div class="enemy-emoji" id="bt-emoji">❔</div>
@@ -239,85 +238,99 @@ const UI = {
   _startMineTimer() {
     if (UI._mineTimer) clearInterval(UI._mineTimer);
     UI._mineTimer = setInterval(() => {
-      const el = document.getElementById("mine-countdown");
-      if (!el) { clearInterval(UI._mineTimer); UI._mineTimer = null; return; }
-      const cd = UI._mineCd();
-      const fill = document.getElementById("mine-prog-fill");
-      const btn  = document.getElementById("mine-collect-btn");
-      const icon = document.getElementById("mine-icon");
-      if (cd.ready) {
+      let anyVisible = false;
+      for (const cfg of Game.MINES) {
+        const el = document.getElementById(`mine-cd-${cfg.id}`);
+        if (!el) continue;
+        anyVisible = true;
+        const cd = UI._mineCd(cfg.id);
+        const fill = document.getElementById(`mine-fill-${cfg.id}`);
+        const btn  = document.getElementById(`mine-btn-${cfg.id}`);
+        const icon = document.getElementById(`mine-icon-${cfg.id}`);
         el.textContent = cd.text;
-        el.className = "mine-countdown mine-cd-ready";
+        el.className = `mc-timer mine-countdown ${cd.ready ? "mine-cd-ready" : ""}`;
         if (fill) fill.style.width = cd.pct + "%";
-        if (btn)  { btn.disabled = false; btn.textContent = `🥚 Abholen (${cd.eggsReady}×)`; }
-        if (icon) icon.classList.add("mine-ready-pulse");
-      } else {
-        el.textContent = cd.text;
-        el.className = "mine-countdown";
-        if (fill) fill.style.width = cd.pct + "%";
-        if (btn)  { btn.disabled = true; btn.textContent = "🥚 Abholen"; }
-        if (icon) icon.classList.remove("mine-ready-pulse");
+        if (btn) {
+          btn.disabled = !cd.ready;
+          btn.textContent = cd.ready ? `${cfg.reward.emoji} Abholen (${cd.itemsReady}×)` : `${cfg.reward.emoji} Abholen`;
+          btn.className = `btn ${cd.ready ? "good" : "ghost"} mc-collect-btn`;
+        }
+        if (icon) icon.className = `mc-emoji ${cd.ready ? "mine-ready-pulse" : ""}`;
       }
+      if (!anyVisible) { clearInterval(UI._mineTimer); UI._mineTimer = null; }
     }, 100);
   },
 
-  _mineCd() {
-    const s = Game.state;
-    const elapsed = Date.now() - (s.mine?.lastCollect || 0);
-    const total = Game.MINE_COOLDOWN_MS;
-    const eggsReady = Math.floor(elapsed / total);
-    const ready = eggsReady > 0;
-    // Fortschritt innerhalb des aktuellen Zyklus
+  _mineCd(mineId) {
+    const cfg = Game.MINES.find(m => m.id === mineId);
+    const mine = Game.state.mines?.[mineId];
+    if (!cfg || !mine?.owned) return { ready: false, itemsReady: 0, pct: 0, text: "—" };
+    const elapsed = Date.now() - (mine.lastCollect || 0);
+    const total = cfg.cooldown;
+    const itemsReady = Math.floor(elapsed / total);
+    const ready = itemsReady > 0;
     const cycleElapsed = elapsed % total;
     const pct = (cycleElapsed / total) * 100;
     const remaining = total - cycleElapsed;
-    const m = Math.floor(remaining / 60000);
+    const h = Math.floor(remaining / 3600000);
+    const mm = Math.floor((remaining % 3600000) / 60000);
     const sec = Math.floor((remaining % 60000) / 1000);
-    return { ready, eggsReady, pct, text: `${m}:${String(sec).padStart(2, "0")}` };
+    const text = h > 0
+      ? `${h}:${String(mm).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
+      : `${mm}:${String(sec).padStart(2,"0")}`;
+    return { ready, itemsReady, pct, text };
   },
 
   renderMine() {
     const s = Game.state;
-    const canAfford = s.gold >= Game.MINE_COST;
-    if (!s.mine.owned) {
+    const fmtCd = ms => {
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      return h > 0 ? `${h}h ${m}min` : `${m}min`;
+    };
+
+    const cards = Game.MINES.map(cfg => {
+      const owned = s.mines?.[cfg.id]?.owned;
+      const cd = owned ? UI._mineCd(cfg.id) : null;
+      const afford = s.gold >= cfg.cost;
+
+      const body = owned ? `
+        <div class="mc-bar-row">
+          <div class="mc-bar">
+            <div class="mc-fill" id="mine-fill-${cfg.id}" style="width:${cd.pct}%;background:${cfg.color}"></div>
+          </div>
+          <span class="mc-timer mine-countdown ${cd.ready ? "mine-cd-ready" : ""}" id="mine-cd-${cfg.id}">${cd.text}</span>
+        </div>
+        <button class="btn ${cd.ready ? "good" : "ghost"} mc-collect-btn" id="mine-btn-${cfg.id}"
+                onclick="Game.mineCollect('${cfg.id}')" ${cd.ready ? "" : "disabled"}>
+          ${cfg.reward.emoji} Abholen${cd.ready ? ` (${cd.itemsReady}×)` : ""}
+        </button>` : `
+        <div class="mc-buy-desc">${cfg.reward.emoji} ${cfg.reward.label} · alle ${fmtCd(cfg.cooldown)}</div>
+        <button class="btn ${afford ? "good" : "ghost"} mc-buy-btn" onclick="Game.buyMine('${cfg.id}')" ${afford ? "" : "disabled"}>
+          💰 ${cfg.cost.toLocaleString("de-DE")} Gold kaufen
+        </button>`;
+
       return `
-        <div class="panel">
-          <div class="mode-bar">
-            <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
+        <div class="mine-card ${owned ? "mc-owned" : "mc-buyable"}" style="--mcolor:${cfg.color}">
+          <div class="mc-header">
+            <span class="mc-emoji ${owned && cd?.ready ? "mine-ready-pulse" : ""}" id="mine-icon-${cfg.id}">${cfg.emoji}</span>
+            <div class="mc-title">
+              <div class="mc-name">${cfg.name}</div>
+              <div class="mc-sub">${owned ? `${cfg.reward.emoji} ${cfg.reward.label} · ${fmtCd(cfg.cooldown)}` : `${cfg.cost.toLocaleString("de-DE")} 💰`}</div>
+            </div>
+            ${owned ? `<span class="mc-badge" style="background:${cfg.color}">✓</span>` : ""}
           </div>
-          <h2>⛏️ Mine</h2>
-          <div class="mine-buy">
-            <div class="mine-big-icon">⛏️</div>
-            <p class="mine-desc">Schürft automatisch alle <b>10 Minuten</b> ein Standard-Ei — auch wenn du nicht spielst.</p>
-            <button class="btn good" onclick="Game.buyMine()" ${canAfford ? "" : "disabled"}>
-              Kaufen — ${Game.MINE_COST.toLocaleString("de-DE")} 💰
-            </button>
-            ${!canAfford ? `<div class="hint" style="margin-top:8px">Noch ${(Game.MINE_COST - Math.floor(s.gold)).toLocaleString("de-DE")} 💰 fehlen</div>` : ""}
-          </div>
+          <div class="mc-body">${body}</div>
         </div>`;
-    }
-    const cd = UI._mineCd();
+    }).join("");
+
     return `
       <div class="panel">
         <div class="mode-bar">
           <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
         </div>
-        <h2>⛏️ Mine</h2>
-        <div class="mine-owned">
-          <div class="mine-big-icon ${cd.ready ? "mine-ready-pulse" : ""}" id="mine-icon">⛏️</div>
-          <div class="mine-cd-label">${cd.ready ? `${cd.eggsReady} Ei${cd.eggsReady > 1 ? "er" : ""} bereit!` : "Nächstes Ei in"}</div>
-          <div class="mine-bar">
-            <div class="mine-prog-fill" id="mine-prog-fill" style="width:${cd.pct}%"></div>
-          </div>
-          <div class="mine-countdown ${cd.ready ? "mine-cd-ready" : ""}" id="mine-countdown">
-            ${cd.text}
-          </div>
-          <button class="btn good mine-collect-btn" id="mine-collect-btn"
-                  onclick="Game.mineCollect()" ${cd.ready ? "" : "disabled"}>
-            🥚 Abholen${cd.ready ? ` (${cd.eggsReady}×)` : ""}
-          </button>
-          <div class="mine-info">Standard-Ei · alle 10 Minuten</div>
-        </div>
+        <h2>⛏️ Minen</h2>
+        <div class="mines-grid">${cards}</div>
       </div>`;
   },
 
@@ -559,7 +572,7 @@ const UI = {
         <div class="mode-bar"><button class="btn ghost sm" onclick="Game.backToTeam()">← Team</button></div>
         <h2>🏟️ Stage wählen</h2>
         <button class="btn frontier-btn" onclick="Game.startStageRun(${frontier})">🚩 Höchste Stage spielen — Stage ${frontier}</button>
-        <p class="hint" style="text-align:left;padding:6px 0 8px">Die höchste Stage (🚩) führt nach Sieg automatisch weiter — bis dein Team fällt. Geschaffte Stages (✓) kannst du einzeln wiederholen.</p>
+        <p class="hint" style="text-align:left;padding:6px 0 8px">Die höchste Stage (🚩) startet nach einer Niederlage automatisch bei Welle 1 neu — dein Team kämpft endlos weiter. Nach einem Sieg geht es direkt zur nächsten Stage. Geschaffte Stages (✓) kannst du einzeln wiederholen.</p>
         <div class="stage-tiles">${tiles}</div>
       </div>`;
   },

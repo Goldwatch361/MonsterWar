@@ -275,11 +275,18 @@ const Battle = {
     const team = s.team;
     const alive = team.filter(m => m.hp > 0);
 
-    if (alive.length === 0) { // Tod im Stage-Modus → zurück zur Stage-Auswahl
-      UI.toast(`💀 Stage ${s.stage.current} verloren`, "bad");
-      Battle.mode = null;
-      UI.kampfView = "stageSelect";
-      if (UI.current === "home") UI.render();
+    if (alive.length === 0) {
+      if (Battle.frontier) {
+        // Höchste Stage: leise neu starten ab Welle 1
+        UI.toast(`💀 Niederlage — Welle 1 neu gestartet`, "bad");
+        Battle.startStage(s.stage.current);
+        if (UI.current === "home") UI.render();
+      } else {
+        UI.toast(`💀 Stage ${s.stage.current} verloren`, "bad");
+        Battle.mode = null;
+        UI.kampfView = "stageSelect";
+        if (UI.current === "home") UI.render();
+      }
       return;
     }
 
@@ -337,12 +344,8 @@ const Battle = {
     const s = Game.state;
     const r = Math.random();
     const playerLevel = s.playerLevel || 1;
-    // 4% Monster-Drop, 10% Ei (Typ abhängig vom Spieler-Level), 8% Kristall, 5% Stein
-    if (r < 0.04 && s.collection.length < 200) {
-      const mon = Monster.randomOfRarity("normal");
-      Game.addMonster(mon);
-      UI.toast("🎁 " + mon.name + " erbeutet!", "good");
-    } else if (r < 0.14) {
+    // 10% Ei (Typ abhängig vom Spieler-Level), 0.5% Kristall
+    if (r < 0.10) {
       // Ei-Typ nach Spieler-Level bestimmen (gewichtet)
       const eligible = DATA.eggTypes.filter(et => et.dropMinLevel != null && playerLevel >= et.dropMinLevel);
       if (eligible.length > 0) {
@@ -353,7 +356,7 @@ const Battle = {
         s.inventory.eggs[chosen.id] = (s.inventory.eggs[chosen.id] || 0) + 1;
         UI.toast(`${chosen.emoji} ${chosen.name} gefunden!`, "good");
       }
-    } else if (r < 0.22) {
+    } else if (r < 0.105) {
       s.inventory.crystals += 1 + Math.floor(e.level / 20);
       UI.toast("💎 Kristall gefunden!", "good");
     }
