@@ -41,7 +41,8 @@ const Battle = {
   /* Schadensberechnung mit Element-Vorteil + Varianz.
      Defense = prozentualer Abzug mit Diminishing Returns (max 75 %) — verhindert
      dass hochrangige Monster komplett immun gegen Gegner-Schaden werden. */
-  calculateDamage(attacker, defender) {
+  calculateDamage(attacker, defender, fixed = false) {
+    if (fixed) return { dmg: attacker.attack, advantage: false };
     const variance = 0.85 + Math.random() * 0.30;
     let mod = 1;
     const atkEl = DATA.elements[attacker.element];
@@ -50,7 +51,6 @@ const Battle = {
              DATA.elements[defender.element].strong === attacker.element) mod = 0.85;
     const def = defender.defense || 0;
     const atk = attacker.attack;
-    // Soft-Cap: je höher die DEF relativ zu ATK, desto mehr Reduktion — aber nie über 75 %
     const defReduction = Math.min(0.75, def / (def + atk * 1.5));
     const raw = Math.round(atk * mod * variance * (1 - defReduction));
     return { dmg: Math.max(1, raw), advantage: mod > 1 };
@@ -295,7 +295,7 @@ const Battle = {
     if (Battle.phase === "team") {
       const attacker = Battle.nextAttacker(team);
       if (!attacker) { UI.refresh(); return; }
-      const dmg = Battle.calculateDamage(attacker, s.enemy).dmg;
+      const dmg = Battle.calculateDamage(attacker, s.enemy, true).dmg;
       s.enemy.hp -= dmg;
       Battle.lastAttackerId = attacker.id;
       Battle.fx = { type: "monster", attackerId: attacker.id, dmg };
