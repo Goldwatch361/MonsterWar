@@ -103,9 +103,9 @@ const UI = {
 
   updateTopbar() {
     const s = Game.state; if (!s) return;
-    document.getElementById("gold").textContent = Math.floor(s.gold).toLocaleString("de-DE");
-    document.getElementById("crystals").textContent = s.inventory.crystals;
-    document.getElementById("eggs").textContent = Object.values(s.inventory.eggs).reduce((a, b) => a + b, 0);
+    document.getElementById("gold").textContent = UI.fmt(Math.floor(s.gold));
+    document.getElementById("crystals").textContent = UI.fmt(s.inventory.crystals);
+    document.getElementById("eggs").textContent = UI.fmt(Object.values(s.inventory.eggs).reduce((a, b) => a + b, 0));
     document.getElementById("totalAtk").textContent = UI.fmt(Game.totalAttack());
     document.getElementById("totalDef").textContent = UI.fmt(Game.totalDefense());
     document.getElementById("playerLevel").textContent = s.playerLevel;
