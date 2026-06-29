@@ -361,7 +361,7 @@ const UI = {
     if (UI.dashView === "mine") return UI.renderMine();
     if (UI._mineTimer) { clearInterval(UI._mineTimer); UI._mineTimer = null; }
     const s = Game.state;
-    const avatar = s.collection.find(m => m.id === s.avatarMonsterId) || s.collection[0] || null;
+    const avatar = s.collection.find(e => Game.groupKey(e) === s.avatarKey) || s.collection[0] || null;
     if (!avatar) return `<div class="home-avatar-wrap"><svg class="home-bg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice"><rect width="400" height="700" fill="#64b5f6"/></svg><div class="hint" style="position:relative;z-index:1;text-align:center;padding:40px 0">Noch keine Monster — beschwöre dein erstes!</div></div>`;
     const rc = UI.rarColor(avatar.rarity);
     const rar = DATA.rarities[avatar.rarity];
@@ -455,9 +455,10 @@ const UI = {
     const cards = groups.map(g => {
       const m = g.sample;
       const rc = UI.rarColor(m.rarity);
-      const active = m.id === s.avatarMonsterId;
+      const key = Game.groupKey(m);
+      const active = key === s.avatarKey;
       return `
-        <div class="av-pick-card ${active ? "active" : ""} ${UI.glowClass(m.rarity)}" style="--rcolor:${rc}" onclick="UI.setAvatar('${m.id}')">
+        <div class="av-pick-card ${active ? "active" : ""} ${UI.glowClass(m.rarity)}" style="--rcolor:${rc}" onclick="UI.setAvatar('${key}')">
           <div class="av-pick-emoji">${m.emoji}</div>
           <div class="av-pick-rar" style="color:${rc}">${DATA.rarities[m.rarity].name.slice(0,4)}</div>
           <div class="av-pick-name">${m.name}</div>
@@ -470,8 +471,8 @@ const UI = {
     `);
   },
 
-  setAvatar(id) {
-    Game.state.avatarMonsterId = id;
+  setAvatar(key) {
+    Game.state.avatarKey = key;
     UI.closeModal();
     UI.render();
   },
@@ -523,7 +524,7 @@ const UI = {
 
     const rows = sorted.map(g => {
       const m = g.sample;
-      const inTeam = g.members.filter(x => s.team.some(t => t.id === x.id)).length;
+      const inTeam = s.team.filter(t => Game.groupKey(t) === g.key).length;
       const canAdd = inTeam < g.count && !full;
       const canClick = inTeam > 0 || canAdd;
       const clickFn = inTeam > 0 ? `Game.teamRemoveFromGroup('${g.key}')` : `Game.teamAddFromGroup('${g.key}')`;
@@ -819,7 +820,7 @@ const UI = {
 
     return `
       <div class="panel">
-        <h2>Sammlung <span style="color:var(--muted);font-weight:400">(${s.collection.length} Monster)</span></h2>
+        <h2>Sammlung <span style="color:var(--muted);font-weight:400">(${s.collection.reduce((n,e)=>n+e.count,0).toLocaleString("de-DE")} Monster)</span></h2>
         ${sections || '<div class="hint">Noch keine Monster.</div>'}
       </div>`;
   },
@@ -848,7 +849,7 @@ const UI = {
     const s = Game.state;
     // besessene Formen als templateId|rarity zählen
     const owned = {};
-    for (const m of s.collection) { const k = m.templateId + "|" + m.rarity; owned[k] = (owned[k] || 0) + 1; }
+    for (const m of s.collection) { const k = m.templateId + "|" + m.rarity; owned[k] = (owned[k] || 0) + m.count; }
 
     const templateIds = Object.keys(DATA.templates);
     const ranks = DATA.rarityOrder.slice().reverse(); // höchster Rang oben

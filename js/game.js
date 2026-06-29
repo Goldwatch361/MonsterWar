@@ -7,15 +7,16 @@ const Game = {
   /* Frischer Startzustand (Erststart) */
   newGame() {
     const starter = Monster.create("flammenwolf");
+    const starterEntry = Game.toCollectionEntry(starter, 1);
     Game.state = {
       version: Save.VERSION,
       gold: 50,
       playerLevel: 1,
       playerExp: 0,
       team: [starter],
-      collection: [starter],
+      collection: [starterEntry],
       inventory: { eggs: { standard: 0, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 }, crystals: 0 },
-      avatarMonsterId: starter.id,
+      avatarKey: Game.groupKey(starterEntry),
       mines: { standard: { owned: false, lastCollect: 0 }, elite: { owned: false, lastCollect: 0 }, goettlich: { owned: false, lastCollect: 0 }, crystal: { owned: false, lastCollect: 0 } },
       enemy: null,
       stage: { current: 1, unlocked: 1, wave: 1, best: {} },
@@ -47,9 +48,25 @@ const Game = {
       for (const t of ['standard','premium','elite','mythic','divine','cosmic','transcend']) {
         if (Game.state.inventory.eggs[t] == null) Game.state.inventory.eggs[t] = 0;
       }
-      // Avatar-Migration
-      if (!Game.state.avatarMonsterId && Game.state.collection.length)
-        Game.state.avatarMonsterId = Game.state.collection[0].id;
+      // Collection-Migration: altes Format (individuelle Objekte mit id) → aggregiert (count)
+      if (Game.state.collection.length && Game.state.collection[0]?.id !== undefined) {
+        const map = new Map();
+        for (const m of Game.state.collection) {
+          const k = Game.groupKey(m);
+          if (!map.has(k)) map.set(k, Game.toCollectionEntry(m, 0));
+          map.get(k).count++;
+        }
+        Game.state.collection = [...map.values()];
+      }
+      // Avatar-Migration: id → groupKey
+      if (Game.state.avatarMonsterId) {
+        const entry = Game.state.collection[0];
+        Game.state.avatarKey = entry ? Game.groupKey(entry) : "";
+        delete Game.state.avatarMonsterId;
+      }
+      if (!Game.state.avatarKey && Game.state.collection.length)
+        Game.state.avatarKey = Game.groupKey(Game.state.collection[0]);
+      // Team-Migration: alte Team-Objekte behalten (haben schon id/hp), recalc sicherstellen
       // Mines-Migration: altes mine-Objekt → mines-Objekt
       if (!Game.state.mines) {
         Game.state.mines = {
@@ -64,10 +81,8 @@ const Game = {
         if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
       }
       if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
-      // Referenz-Integrität: Team-Einträge sollen auf Collection-Objekte zeigen
-      Game.state.team = Game.state.team
-        .map(tm => Game.state.collection.find(c => c.id === tm.id))
-        .filter(Boolean);
+      // Team-Integrität: ungültige Einträge entfernen; Team hat eigene id/hp Objekte
+      Game.state.team = Game.state.team.filter(tm => tm && tm.id);
       // Stage wird beim Laden neu gestartet (Welle 1, Team geheilt)
       Battle.startStage(Game.state.stage.current);
       return false; // kein Erststart
@@ -77,20 +92,14 @@ const Game = {
   },
 
   /* ---- Gesamt-Stärke der gesamten Sammlung (für Topbar-Anzeige) ---- */
-  totalAttack() {
-    return Game.state.collection.reduce((sum, m) => sum + m.attack, 0);
-  },
-  totalDefense() {
-    return Game.state.collection.reduce((sum, m) => sum + m.defense, 0);
-  },
-  totalHP() {
-    return Game.state.collection.reduce((sum, m) => sum + m.maxHp, 0);
-  },
+  totalAttack()  { return Game.state.collection.reduce((s, e) => s + e.attack  * e.count, 0); },
+  totalDefense() { return Game.state.collection.reduce((s, e) => s + e.defense * e.count, 0); },
+  totalHP()      { return Game.state.collection.reduce((s, e) => s + e.maxHp   * e.count, 0); },
 
   /* Wie viele identische Monster (gleiche Gruppe) man besitzt */
   groupCount(m) {
-    const k = Game.groupKey(m);
-    return Game.state.collection.filter(x => Game.groupKey(x) === k).length;
+    const entry = Game.state.collection.find(e => Game.groupKey(e) === Game.groupKey(m));
+    return entry ? entry.count : 0;
   },
 
   /* ---- Spieler-Erfahrung ---- */
@@ -154,12 +163,12 @@ const Game = {
   backToStageSelect() { Battle.mode = null; UI.kampfView = "team"; UI.render(); },
 
   findMonster(id) {
-    return Game.state.collection.find(m => m.id === id);
+    return Game.state.team.find(m => m.id === id);
   },
 
-  /* Sortierte Kopie der Sammlung: Seltenheit ↓, Angriff ↓, Name ↑ */
+  /* Sortierte Kopie der Sammlung-Einträge */
   sortedCollection() {
-    return Game.state.collection.slice().sort((a, b) => {
+    return [...Game.state.collection].sort((a, b) => {
       const r = DATA.rarities[b.rarity].order - DATA.rarities[a.rarity].order;
       if (r !== 0) return r;
       if (b.attack !== a.attack) return b.attack - a.attack;
@@ -167,50 +176,103 @@ const Game = {
     });
   },
 
-  /* Die n stärksten Monster (für WorldBoss-Anzeige) */
+  /* Die n stärksten Monster (für WorldBoss — als Team-ähnliche Objekte) */
   strongestMonsters(n) {
-    return Game.state.collection.slice().sort((a, b) =>
-      (b.attack + b.defense + b.maxHp * 0.1) - (a.attack + a.defense + a.maxHp * 0.1)
-    ).slice(0, n);
+    return [...Game.state.collection]
+      .sort((a, b) => (b.attack + b.defense + b.maxHp * 0.1) - (a.attack + a.defense + a.maxHp * 0.1))
+      .slice(0, n)
+      .map(e => ({ ...e, id: DATA.uid(), hp: e.maxHp, skills: [] }));
+  },
+
+  /* Hilfsfunktion: Monster-Objekt → Collection-Eintrag (ohne id/hp) */
+  toCollectionEntry(m, count = 1) {
+    return {
+      templateId: m.templateId,
+      name: m.name,
+      emoji: m.emoji,
+      element: m.element,
+      rarity: m.rarity,
+      baseHp: m.baseHp,
+      baseAttack: m.baseAttack,
+      baseDefense: m.baseDefense,
+      maxHp: m.maxHp,
+      attack: m.attack,
+      defense: m.defense,
+      fused: m.fused || false,
+      fusedSkill: m.fusedSkill || null,
+      count,
+    };
   },
 
   addMonster(m) {
-    // Neue Monster landen NUR in der Sammlung — Team wird manuell zusammengestellt
-    Game.state.collection.push(m);
+    const key = Game.groupKey(m);
+    const existing = Game.state.collection.find(e => Game.groupKey(e) === key);
+    if (existing) { existing.count++; }
+    else { Game.state.collection.push(Game.toCollectionEntry(m, 1)); }
   },
 
   /* ---- Ei-Beschwörung ---- */
   SUMMON_MAX: 100,
 
-  /* Würfelt n Monster aus der Ei-Tafel und gibt sie zurück */
+  /* ≤100 Eier: individuelle Objekte für Modal; >100: statistisch, nur unique Typen erstellen */
   _rollEgg(egg, n) {
-    const results = [];
+    if (n <= 100) {
+      const results = [];
+      for (let i = 0; i < n; i++) {
+        const roll = Math.random();
+        let acc = 0, rarity = egg.table[0].rarity;
+        for (const row of egg.table) { acc += row.chance; if (roll <= acc) { rarity = row.rarity; break; } }
+        const mon = Monster.randomOfRarity(rarity);
+        Game.addMonster(mon);
+        results.push(mon);
+      }
+      return results;
+    }
+    // Großer Batch: nur templateId+rarity zählen, Monster einmal pro uniquem Typ erstellen
+    const keyCounts = new Map();
+    const keyToTemplate = new Map();
     for (let i = 0; i < n; i++) {
       const roll = Math.random();
       let acc = 0, rarity = egg.table[0].rarity;
       for (const row of egg.table) { acc += row.chance; if (roll <= acc) { rarity = row.rarity; break; } }
-      const mon = Monster.randomOfRarity(rarity);
-      Game.addMonster(mon);
-      results.push(mon);
+      let pool = DATA.templatesByRarity[rarity];
+      let rarityOverride = null;
+      if (!pool || !pool.length) {
+        for (const r of ["legendaer","episch","selten","normal"]) {
+          if (DATA.templatesByRarity[r]?.length) { pool = DATA.templatesByRarity[r]; break; }
+        }
+        rarityOverride = rarity;
+      }
+      const templateId = pool[Math.floor(Math.random() * pool.length)];
+      const key = templateId + "|" + (rarityOverride || rarity);
+      keyCounts.set(key, (keyCounts.get(key) || 0) + 1);
+      if (!keyToTemplate.has(key)) keyToTemplate.set(key, { templateId, rarityOverride });
     }
-    return results;
+    for (const [key, cnt] of keyCounts) {
+      const { templateId, rarityOverride } = keyToTemplate.get(key);
+      const mon = Monster.create(templateId, rarityOverride);
+      const cKey = Game.groupKey(mon);
+      const existing = Game.state.collection.find(e => Game.groupKey(e) === cKey);
+      if (existing) existing.count += cnt;
+      else Game.state.collection.push(Game.toCollectionEntry(mon, cnt));
+    }
+    return null; // kein Modal für große Batches
   },
 
-  /* Ei kaufen & sofort öffnen (Summon-Tab "Kaufen") */
+  /* Ei kaufen & sofort öffnen */
   buyAndCrack(eggId, count = 1) {
     const s = Game.state;
     const egg = DATA.eggTypes.find(e => e.id === eggId);
     if (!egg) return;
     if (s.playerLevel < egg.minLevel) { UI.toast(`🥚 Erst ab Spieler-Level ${egg.minLevel}!`, "bad"); return; }
     const have = egg.currency === "crystals" ? s.inventory.crystals : s.gold;
-    const trueMax = Math.floor(have / egg.cost);
-    const n = count === "max" ? trueMax : Math.min(count, trueMax);
+    const n = count === "max" ? Math.floor(have / egg.cost) : Math.min(count, Math.floor(have / egg.cost));
     if (n < 1) { UI.toast(egg.currency === "crystals" ? "Nicht genug Kristalle! 💎" : "Nicht genug Gold! 💰", "bad"); return; }
-    const totalCost = egg.cost * n;
-    if (egg.currency === "crystals") s.inventory.crystals -= totalCost;
-    else s.gold -= totalCost;
+    if (egg.currency === "crystals") s.inventory.crystals -= egg.cost * n;
+    else s.gold -= egg.cost * n;
     const results = Game._rollEgg(egg, n);
-    UI.showSummonResult(results, egg);
+    if (results) { UI.showSummonResult(results, egg); }
+    else UI.toast(`🥚 ${n.toLocaleString("de-DE")} ${egg.name} geöffnet`, "good");
     UI.render();
   },
 
@@ -224,7 +286,8 @@ const Game = {
     if (n < 1) { UI.toast("Keine Eier dieser Art!", "bad"); return; }
     s.inventory.eggs[eggId] -= n;
     const results = Game._rollEgg(egg, n);
-    UI.showSummonResult(results, egg);
+    if (results) { UI.showSummonResult(results, egg); }
+    else UI.toast(`🥚 ${n.toLocaleString("de-DE")} ${egg.name} geöffnet`, "good");
     UI.render();
   },
 
@@ -253,28 +316,25 @@ const Game = {
     UI.render();
   },
 
-  /* Aus einer Gruppe das stärkste, noch nicht eingesetzte Monster ins Team holen */
+  /* Aus einer Gruppe ein Monster ins Team holen (neues Team-Objekt mit id+hp) */
   teamAddFromGroup(key) {
     const s = Game.state;
     if (s.team.length >= Game.MAX_TEAM) { UI.toast(`Team voll (max ${Game.MAX_TEAM})!`, "bad"); return; }
-    const group = Game.collectionGroups().find(g => g.key === key);
-    if (!group) return;
-    const cand = group.members.find(m => !s.team.some(t => t.id === m.id));
-    if (!cand) return;
-    Monster.heal(cand);
-    s.team.push(cand);
+    const entry = s.collection.find(e => Game.groupKey(e) === key);
+    if (!entry) return;
+    const inTeamCount = s.team.filter(t => Game.groupKey(t) === key).length;
+    if (inTeamCount >= entry.count) { UI.toast("Alle Monster dieser Art bereits im Team!", "bad"); return; }
+    s.team.push({ ...entry, id: DATA.uid(), hp: entry.maxHp, exp: 0, expToNext: 100, skills: [] });
     UI.render();
   },
 
-  /* Aus einer Gruppe ein eingesetztes Monster aus dem Team nehmen */
+  /* Ein eingesetztes Monster aus dem Team nehmen */
   teamRemoveFromGroup(key) {
     const s = Game.state;
-    const group = Game.collectionGroups().find(g => g.key === key);
-    if (!group) return;
-    const inTeam = group.members.find(m => s.team.some(t => t.id === m.id));
-    if (!inTeam) return;
+    const idx = s.team.findIndex(t => Game.groupKey(t) === key);
+    if (idx < 0) return;
     if (s.team.length === 1) { UI.toast("Mindestens 1 Monster im Team!", "bad"); return; }
-    s.team = s.team.filter(m => m.id !== inTeam.id);
+    s.team.splice(idx, 1);
     UI.render();
   },
 
@@ -290,9 +350,8 @@ const Game = {
   },
   autoFillTeam(stat) {
     const s = Game.state;
-    const sorted = [...s.collection]
-      .sort((a, b) => stat === "atk" ? b.attack - a.attack : b.defense - a.defense);
-    s.team = sorted.slice(0, Game.MAX_TEAM);
+    const sorted = [...s.collection].sort((a, b) => stat === "atk" ? b.attack - a.attack : b.defense - a.defense);
+    s.team = sorted.slice(0, Game.MAX_TEAM).map(e => ({ ...e, id: DATA.uid(), hp: e.maxHp, exp: 0, expToNext: 100, skills: [] }));
     UI.render();
   },
 
@@ -301,17 +360,12 @@ const Game = {
   groupKey(m) { return m.templateId + "|" + m.rarity + "|" + m.name; },
 
   collectionGroups() {
-    const map = new Map();
-    for (const m of Game.state.collection) {
-      const k = Game.groupKey(m);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k).push(m);
-    }
-    const groups = [...map.entries()].map(([key, members]) => {
-      const sample = members[0];
-      return { key, members, count: members.length, sample };
-    });
-    // Sortierung: Seltenheit ↓, Angriff ↓, Name ↑
+    const groups = Game.state.collection.map(entry => ({
+      key: Game.groupKey(entry),
+      members: [entry],
+      count: entry.count,
+      sample: entry,
+    }));
     groups.sort((A, B) => {
       const a = A.sample, b = B.sample;
       const r = DATA.rarities[b.rarity].order - DATA.rarities[a.rarity].order;
@@ -333,15 +387,28 @@ const Game = {
     return Math.round(50 * Math.pow(1.9, order));
   },
 
+  /* Hilfsfunktion: fusionierten Eintrag in Collection eintragen (count-basiert) */
+  _applyFusion(entry, pairs) {
+    const fused = Monster.fuse(entry, entry);
+    const fusedKey = Game.groupKey(fused);
+    const src = Game.state.collection.find(e => Game.groupKey(e) === Game.groupKey(entry));
+    if (src) { src.count -= 2 * pairs; }
+    const dst = Game.state.collection.find(e => Game.groupKey(e) === fusedKey);
+    if (dst) { dst.count += pairs; }
+    else { Game.state.collection.push(Game.toCollectionEntry(fused, pairs)); }
+    Game.state.collection = Game.state.collection.filter(e => e.count > 0);
+    return fused;
+  },
+
   /* Alle fusionierbaren Gruppen eines Rangs auf einmal max-fusionieren */
   fuseAllInRank(rarity) {
     const s = Game.state;
-    const groups = Game.collectionGroups().filter(g => g.sample.rarity === rarity && g.count >= 2);
-    if (!groups.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
+    const entries = s.collection.filter(e => e.rarity === rarity && e.count >= 2);
+    if (!entries.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
 
     const resultRarity = DATA.nextRarity(rarity);
     const costPer = Game.fuseCost(resultRarity);
-    const totalPairs = groups.reduce((sum, g) => sum + Math.floor(g.count / 2), 0);
+    const totalPairs = entries.reduce((sum, e) => sum + Math.floor(e.count / 2), 0);
     const totalCost = costPer * totalPairs;
     if (s.gold < totalCost) {
       UI.toast(`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 für alle Fusionen benötigt.`, "bad");
@@ -349,40 +416,29 @@ const Game = {
     }
     s.gold -= totalCost;
 
-    const removeIds = new Set();
-    const newMonsters = [];
-    let lastFused = null;
-    for (const g of groups) {
-      const pairs = Math.floor(g.members.length / 2);
-      for (let i = 0; i < pairs; i++) {
-        const a = g.members[2 * i], b = g.members[2 * i + 1];
-        if (!Monster.canFuse(a, b)) continue;
-        removeIds.add(a.id); removeIds.add(b.id);
-        const fused = Monster.fuse(a, b);
-        newMonsters.push(fused); lastFused = fused;
-      }
+    let totalMade = 0, lastFused = null;
+    for (const entry of [...entries]) {
+      const pairs = Math.floor(entry.count / 2);
+      if (pairs < 1) continue;
+      lastFused = Game._applyFusion(entry, pairs);
+      totalMade += pairs;
     }
-    if (!newMonsters.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
-    s.collection = s.collection.filter(m => !removeIds.has(m.id));
-    s.team = s.team.filter(m => !removeIds.has(m.id));
-    for (const m of newMonsters) s.collection.push(m);
-    UI.toast(`⚛ ${newMonsters.length}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    if (!totalMade) { UI.toast("Keine fusionierbaren Paare.", "bad"); return; }
+    UI.toast(`⚛ ${totalMade}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
     UI.render();
   },
 
-  /* ---- Fusion (Rang-bedingt: gleiche Vorlage + gleiche Seltenheit) ----
-     pairs: Anzahl der Fusionen (je 2 Monster) oder "max". */
+  /* Fusion einer Gruppe (Anzahl oder "max") */
   fuseGroup(key, pairs = 1) {
     const s = Game.state;
-    const group = Game.collectionGroups().find(g => g.key === key);
-    if (!group || group.count < 2) { UI.toast("Mindestens 2 gleiche Monster nötig.", "bad"); return; }
+    const entry = s.collection.find(e => Game.groupKey(e) === key);
+    if (!entry || entry.count < 2) { UI.toast("Mindestens 2 gleiche Monster nötig.", "bad"); return; }
 
-    const maxPairs = Math.floor(group.count / 2);
-    let p = pairs === "max" ? maxPairs : Math.min(parseInt(pairs, 10) || 1, maxPairs);
+    const maxPairs = Math.floor(entry.count / 2);
+    const p = pairs === "max" ? maxPairs : Math.min(parseInt(pairs, 10) || 1, maxPairs);
     if (p < 1) return;
 
-    // Gold-Kosten prüfen
-    const resultRarity = DATA.nextRarity(group.members[0].rarity);
+    const resultRarity = DATA.nextRarity(entry.rarity);
     const costPer = Game.fuseCost(resultRarity);
     const totalCost = costPer * p;
     if (s.gold < totalCost) {
@@ -390,24 +446,8 @@ const Game = {
       return;
     }
     s.gold -= totalCost;
-
-    const members = group.members.slice();
-    const removeIds = new Set();
-    const newMonsters = [];
-    let lastFused = null;
-    for (let i = 0; i < p; i++) {
-      const a = members[2 * i], b = members[2 * i + 1];
-      if (!a || !b || !Monster.canFuse(a, b)) break;
-      removeIds.add(a.id); removeIds.add(b.id);
-      const fused = Monster.fuse(a, b);
-      newMonsters.push(fused); lastFused = fused;
-    }
-    if (newMonsters.length) {
-      s.collection = s.collection.filter(m => !removeIds.has(m.id));
-      s.team = s.team.filter(m => !removeIds.has(m.id));
-      for (const m of newMonsters) s.collection.push(m);
-      UI.toast(`⚛ ${newMonsters.length}× Fusion → ${lastFused.name} (${DATA.rarities[lastFused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
-    }
+    const fused = Game._applyFusion(entry, p);
+    UI.toast(`⚛ ${p}× Fusion → ${fused.name} (${DATA.rarities[fused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
     UI.render();
   },
 
