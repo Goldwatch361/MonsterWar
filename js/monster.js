@@ -17,13 +17,16 @@ const Monster = {
   /* Neue Monster-Instanz aus Vorlage */
   create(templateId, rarityOverride = null) {
     const t = DATA.templates[templateId];
+    const rarity = rarityOverride || t.rarity;
+    const aboveBase = DATA.rarities[rarity].order > DATA.rarities[t.rarity].order;
+    const title = aboveBase ? (DATA.rarityTitles[rarity] || "") : "";
     const m = {
       id: DATA.uid(),
       templateId,
-      name: t.name,
+      name: title ? `${title} ${t.name}` : t.name,
       emoji: t.emoji,
       element: t.element,
-      rarity: rarityOverride || t.rarity,
+      rarity,
       fused: false,
       baseHp: t.hp,
       baseAttack: t.attack,

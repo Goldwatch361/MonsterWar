@@ -81,6 +81,18 @@ const Game = {
         if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
       }
       if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
+      // Namen-Migration: Rang-Titel auf Collection + Team anwenden (fix für egg-rolled monsters)
+      const _fixName = m => {
+        if (!m || !m.templateId || !DATA.templates[m.templateId]) return;
+        const t = DATA.templates[m.templateId];
+        const aboveBase = DATA.rarities[m.rarity].order > DATA.rarities[t.rarity].order;
+        const title = aboveBase ? (DATA.rarityTitles[m.rarity] || "") : "";
+        const expected = title ? `${title} ${t.name}` : t.name;
+        if (m.fused) return; // fusionierte Monster behalten ihren Namen
+        if (m.name !== expected) m.name = expected;
+      };
+      Game.state.collection.forEach(_fixName);
+      Game.state.team.forEach(_fixName);
       // Team-Integrität: ungültige Einträge entfernen; Team hat eigene id/hp Objekte
       Game.state.team = Game.state.team.filter(tm => tm && tm.id);
       // Stage wird beim Laden neu gestartet (Welle 1, Team geheilt)
