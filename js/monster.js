@@ -14,12 +14,13 @@ const Monster = {
     return m;
   },
 
-  /* Neue Monster-Instanz aus Vorlage */
+  /* Neue Monster-Instanz aus Vorlage.
+     Alles über dem Basis-Rang bekommt Titel + fused=true (×3.5 Stats) — egal ob Ei oder Fusion. */
   create(templateId, rarityOverride = null) {
     const t = DATA.templates[templateId];
     const rarity = rarityOverride || t.rarity;
-    const aboveBase = DATA.rarities[rarity].order > DATA.rarities[t.rarity].order;
-    const title = aboveBase ? (DATA.rarityTitles[rarity] || "") : "";
+    const aboveNormal = DATA.rarities[rarity].order > 0;
+    const title = aboveNormal ? (DATA.rarityTitles[rarity] || "") : "";
     const m = {
       id: DATA.uid(),
       templateId,
@@ -27,7 +28,7 @@ const Monster = {
       emoji: t.emoji,
       element: t.element,
       rarity,
-      fused: false,
+      fused: aboveNormal,
       baseHp: t.hp,
       baseAttack: t.attack,
       baseDefense: t.defense,

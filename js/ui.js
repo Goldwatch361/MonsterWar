@@ -833,11 +833,11 @@ const UI = {
     const baseOrder = DATA.rarities[t.rarity].order;
     const order = DATA.rarities[rarity].order;
     if (order < baseOrder) return null;
-    const aboveBase = order > baseOrder;
-    const mult = DATA.rarities[rarity].mult; // kein ×3.5 — Ei-Monster sind nicht fusioniert
-    const title = aboveBase ? (DATA.rarityTitles[rarity] || "") : "";
+    const aboveNormal = order > 0;
+    const mult = DATA.rarities[rarity].mult * (aboveNormal ? 3.5 : 1);
+    const title = aboveNormal ? (DATA.rarityTitles[rarity] || "") : "";
     return {
-      id, rarity, fused: false,
+      id, rarity, fused: aboveNormal,
       name: title ? `${title} ${t.name}` : t.name,
       emoji: t.emoji, element: t.element,
       maxHp: Math.round(t.hp * mult), attack: Math.round(t.attack * mult), defense: Math.round(t.defense * mult),

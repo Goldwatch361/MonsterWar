@@ -81,13 +81,13 @@ const Game = {
         if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
       }
       if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
-      // Namen-Migration: Rang-Titel korrekt setzen, dann Duplikate mergen
+      // Namen-Migration: alles über Normal → Titel + fused=true + korrekte Stats
       const _fixName = m => {
-        if (!m || !m.templateId || !DATA.templates[m.templateId] || m.fused) return;
-        const t = DATA.templates[m.templateId];
-        const aboveBase = DATA.rarities[m.rarity].order > DATA.rarities[t.rarity].order;
-        const title = aboveBase ? (DATA.rarityTitles[m.rarity] || "") : "";
-        m.name = title ? `${title} ${t.name}` : t.name;
+        if (!m || !m.templateId || !DATA.templates[m.templateId]) return;
+        const aboveNormal = DATA.rarities[m.rarity].order > 0;
+        const title = aboveNormal ? (DATA.rarityTitles[m.rarity] || "") : "";
+        m.name = title ? `${title} ${DATA.templates[m.templateId].name}` : DATA.templates[m.templateId].name;
+        if (aboveNormal !== m.fused) { m.fused = aboveNormal; Monster.recalc(m, false); }
       };
       Game.state.collection.forEach(_fixName);
       Game.state.team.forEach(_fixName);
