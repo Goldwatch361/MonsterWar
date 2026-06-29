@@ -37,11 +37,12 @@ const Monster = {
     return m;
   },
 
-  /* Zufälliges Monster einer Seltenheit — aus ALLEN Templates, Seltenheit immer überschreiben.
-     Jedes Monster ist bei jedem Rang erhältlich. */
+  /* Zufälliges Monster einer Seltenheit.
+     Nur Templates deren Basis-Rang ≤ gerolltem Rang (wie im DEX sichtbar). */
   randomOfRarity(rarity) {
-    const all = Object.keys(DATA.templates);
-    const id = all[Math.floor(Math.random() * all.length)];
+    const order = DATA.rarities[rarity].order;
+    const pool = Object.keys(DATA.templates).filter(id => DATA.rarities[DATA.templates[id].rarity].order <= order);
+    const id = pool[Math.floor(Math.random() * pool.length)];
     return Monster.create(id, rarity);
   },
 

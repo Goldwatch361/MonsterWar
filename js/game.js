@@ -81,6 +81,19 @@ const Game = {
         if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
       }
       if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
+      // Ungültige Monster entfernen: unbekanntes Template, unbekannte Seltenheit,
+      // oder Seltenheit unter dem Basis-Rang des Templates (z.B. Glutbär auf Normal)
+      const _isValid = m => {
+        if (!m || !m.templateId || !DATA.templates[m.templateId]) return false;
+        if (!m.rarity || !DATA.rarities[m.rarity]) return false;
+        return DATA.rarities[m.rarity].order >= DATA.rarities[DATA.templates[m.templateId].rarity].order;
+      };
+      const beforeCount = Game.state.collection.reduce((n, e) => n + e.count, 0);
+      Game.state.collection = Game.state.collection.filter(_isValid);
+      Game.state.team       = Game.state.team.filter(_isValid);
+      const removed = beforeCount - Game.state.collection.reduce((n, e) => n + e.count, 0);
+      if (removed > 0) console.log(`[Migration] ${removed} ungültige Monster entfernt`);
+
       // Namen-Migration: alles über Normal → Titel + fused=true + korrekte Stats
       const _fixName = m => {
         if (!m || !m.templateId || !DATA.templates[m.templateId]) return;
@@ -252,14 +265,23 @@ const Game = {
       }
       return results;
     }
-    // Großer Batch: alle Templates, Seltenheit immer überschreiben — wie randomOfRarity
+    // Großer Batch: nur Templates deren Basis-Rang ≤ gerolltem Rang (wie DEX + randomOfRarity)
     const allTemplateIds = Object.keys(DATA.templates);
+    // Eligible-Pool pro Seltenheit vorberechnen (einmalig pro Batch)
+    const rarityPool = {};
+    for (const row of egg.table) {
+      if (!rarityPool[row.rarity]) {
+        const ord = DATA.rarities[row.rarity].order;
+        rarityPool[row.rarity] = allTemplateIds.filter(id => DATA.rarities[DATA.templates[id].rarity].order <= ord);
+      }
+    }
     const keyCounts = new Map();
     for (let i = 0; i < n; i++) {
       const roll = Math.random();
       let acc = 0, rarity = egg.table[0].rarity;
       for (const row of egg.table) { acc += row.chance; if (roll <= acc) { rarity = row.rarity; break; } }
-      const templateId = allTemplateIds[Math.floor(Math.random() * allTemplateIds.length)];
+      const pool = rarityPool[rarity];
+      const templateId = pool[Math.floor(Math.random() * pool.length)];
       const key = templateId + "|" + rarity;
       keyCounts.set(key, (keyCounts.get(key) || 0) + 1);
     }
