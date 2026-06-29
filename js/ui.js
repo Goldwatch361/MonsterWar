@@ -832,12 +832,12 @@ const UI = {
     const t = DATA.templates[id];
     const baseOrder = DATA.rarities[t.rarity].order;
     const order = DATA.rarities[rarity].order;
-    if (order < baseOrder) return null; // existiert nicht (Fusion geht nur aufwärts)
-    const fused = order > baseOrder;
-    const mult = DATA.rarities[rarity].mult * (fused ? 3.5 : 1);
-    const title = fused ? (DATA.rarityTitles[rarity] || "") : "";
+    if (order < baseOrder) return null;
+    const aboveBase = order > baseOrder;
+    const mult = DATA.rarities[rarity].mult; // kein ×3.5 — Ei-Monster sind nicht fusioniert
+    const title = aboveBase ? (DATA.rarityTitles[rarity] || "") : "";
     return {
-      id, rarity, fused,
+      id, rarity, fused: false,
       name: title ? `${title} ${t.name}` : t.name,
       emoji: t.emoji, element: t.element,
       maxHp: Math.round(t.hp * mult), attack: Math.round(t.attack * mult), defense: Math.round(t.defense * mult),

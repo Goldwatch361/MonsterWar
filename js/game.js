@@ -81,18 +81,30 @@ const Game = {
         if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
       }
       if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
-      // Namen-Migration: Rang-Titel auf Collection + Team anwenden (fix für egg-rolled monsters)
+      // Namen-Migration: Rang-Titel korrekt setzen, dann Duplikate mergen
       const _fixName = m => {
-        if (!m || !m.templateId || !DATA.templates[m.templateId]) return;
+        if (!m || !m.templateId || !DATA.templates[m.templateId] || m.fused) return;
         const t = DATA.templates[m.templateId];
         const aboveBase = DATA.rarities[m.rarity].order > DATA.rarities[t.rarity].order;
         const title = aboveBase ? (DATA.rarityTitles[m.rarity] || "") : "";
-        const expected = title ? `${title} ${t.name}` : t.name;
-        if (m.fused) return; // fusionierte Monster behalten ihren Namen
-        if (m.name !== expected) m.name = expected;
+        m.name = title ? `${title} ${t.name}` : t.name;
       };
       Game.state.collection.forEach(_fixName);
       Game.state.team.forEach(_fixName);
+      // Duplikate nach Umbenennen mergen (gleicher groupKey → count addieren)
+      const _mergeMap = new Map();
+      for (const e of Game.state.collection) {
+        const k = Game.groupKey(e);
+        if (_mergeMap.has(k)) _mergeMap.get(k).count += e.count;
+        else _mergeMap.set(k, Object.assign({}, e));
+      }
+      Game.state.collection = [..._mergeMap.values()];
+      // avatarKey aktualisieren falls Name sich geändert hat
+      if (Game.state.avatarKey) {
+        const [tid, rar] = Game.state.avatarKey.split("|");
+        const entry = Game.state.collection.find(e => e.templateId === tid && e.rarity === rar);
+        if (entry) Game.state.avatarKey = Game.groupKey(entry);
+      }
       // Team-Integrität: ungültige Einträge entfernen; Team hat eigene id/hp Objekte
       Game.state.team = Game.state.team.filter(tm => tm && tm.id);
       // Stage wird beim Laden neu gestartet (Welle 1, Team geheilt)
