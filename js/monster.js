@@ -33,21 +33,12 @@ const Monster = {
     return m;
   },
 
-  /* Zufälliges Monster einer Seltenheit (Summon / Drop).
-     Existiert keine Vorlage dieser Seltenheit (z.B. Mythisch), wird eine Vorlage der
-     nächsthöchsten verfügbaren Seltenheit genommen und der Rang überschrieben. */
+  /* Zufälliges Monster einer Seltenheit — aus ALLEN Templates, Seltenheit immer überschreiben.
+     Jedes Monster ist bei jedem Rang erhältlich. */
   randomOfRarity(rarity) {
-    let pool = DATA.templatesByRarity[rarity];
-    let override = null;
-    if (!pool || pool.length === 0) {
-      const order = ["mythisch", "legendaer", "episch", "selten", "normal"];
-      for (const r of order) {
-        if (DATA.templatesByRarity[r] && DATA.templatesByRarity[r].length) { pool = DATA.templatesByRarity[r]; break; }
-      }
-      override = rarity;
-    }
-    const id = pool[Math.floor(Math.random() * pool.length)];
-    return Monster.create(id, override);
+    const all = Object.keys(DATA.templates);
+    const id = all[Math.floor(Math.random() * all.length)];
+    return Monster.create(id, rarity);
   },
 
   /* Voll heilen */

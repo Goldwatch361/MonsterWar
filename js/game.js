@@ -228,29 +228,20 @@ const Game = {
       }
       return results;
     }
-    // Großer Batch: nur templateId+rarity zählen, Monster einmal pro uniquem Typ erstellen
+    // Großer Batch: alle Templates, Seltenheit immer überschreiben — wie randomOfRarity
+    const allTemplateIds = Object.keys(DATA.templates);
     const keyCounts = new Map();
-    const keyToTemplate = new Map();
     for (let i = 0; i < n; i++) {
       const roll = Math.random();
       let acc = 0, rarity = egg.table[0].rarity;
       for (const row of egg.table) { acc += row.chance; if (roll <= acc) { rarity = row.rarity; break; } }
-      let pool = DATA.templatesByRarity[rarity];
-      let rarityOverride = null;
-      if (!pool || !pool.length) {
-        for (const r of ["legendaer","episch","selten","normal"]) {
-          if (DATA.templatesByRarity[r]?.length) { pool = DATA.templatesByRarity[r]; break; }
-        }
-        rarityOverride = rarity;
-      }
-      const templateId = pool[Math.floor(Math.random() * pool.length)];
-      const key = templateId + "|" + (rarityOverride || rarity);
+      const templateId = allTemplateIds[Math.floor(Math.random() * allTemplateIds.length)];
+      const key = templateId + "|" + rarity;
       keyCounts.set(key, (keyCounts.get(key) || 0) + 1);
-      if (!keyToTemplate.has(key)) keyToTemplate.set(key, { templateId, rarityOverride });
     }
     for (const [key, cnt] of keyCounts) {
-      const { templateId, rarityOverride } = keyToTemplate.get(key);
-      const mon = Monster.create(templateId, rarityOverride);
+      const [templateId, rarity] = key.split("|");
+      const mon = Monster.create(templateId, rarity);
       const cKey = Game.groupKey(mon);
       const existing = Game.state.collection.find(e => Game.groupKey(e) === cKey);
       if (existing) existing.count += cnt;
