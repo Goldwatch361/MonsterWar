@@ -375,7 +375,7 @@ const Game = {
   /* Gold-Kosten für eine Fusion (Ergebnis-Rang entscheidet) */
   fuseCost(resultRarity) {
     const order = DATA.rarities[resultRarity].order;
-    return Math.round(50 * Math.pow(1.9, order));
+    return Math.round(500 * Math.pow(2.5, order));
   },
 
   /* Hilfsfunktion: fusionierten Eintrag in Collection eintragen (count-basiert) */
