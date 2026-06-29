@@ -926,9 +926,10 @@ const UI = {
           ${locked
             ? `<div class="sc-lock">🔒 Ab Level ${egg.minLevel}</div>`
             : `<div class="summon-btns">
-                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 1)" ${afford1 ? "" : "disabled"}>×1</button>
+                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 1)" ${maxN >= 1 ? "" : "disabled"}>×1</button>
                  <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 10)" ${maxN >= 10 ? "" : "disabled"}>×10</button>
-                 <button class="btn sm good" onclick="Game.buyAndCrack('${egg.id}', 'max')" ${maxN >= 1 ? "" : "disabled"}>Max ${maxN || 0}</button>
+                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 100)" ${maxN >= 100 ? "" : "disabled"}>×100</button>
+                 <button class="btn sm good" onclick="Game.buyAndCrack('${egg.id}', 'max')" ${maxN >= 1 ? "" : "disabled"}>Max ${maxN.toLocaleString("de-DE")}</button>
                </div>
                ${cnt > 0 ? `<div class="summon-btns" style="margin-top:5px">
                  <span class="sc-stock-label">🥚 ×${cnt}</span>
@@ -1015,7 +1016,15 @@ const UI = {
               <span class="rh-info">${list.length} Arten${fuseableCount ? ` · ${fuseableCount} fusionierbar` : ""}</span>
               <span class="rh-arrow">${open ? "▲" : "▼"}</span>
             </button>
-            ${fuseableCount ? `<button class="btn sm good rank-fuse-all" onclick="Game.fuseAllInRank('${rarity}')" title="${(Game.fuseCost(DATA.nextRarity(rarity)) * list.filter(g=>g.count>=2).reduce((s,g)=>s+Math.floor(g.count/2),0)).toLocaleString('de-DE')} 💰 gesamt">⚛ Alle</button>` : ""}
+            ${fuseableCount ? (() => {
+              const totalPairs = list.filter(g=>g.count>=2).reduce((s,g)=>s+Math.floor(g.count/2),0);
+              const totalCost  = Game.fuseCost(DATA.nextRarity(rarity)) * totalPairs;
+              const canAfford  = Game.state.gold >= totalCost;
+              return `<button class="btn sm good rank-fuse-all${canAfford ? "" : " fuse-all-broke"}" onclick="Game.fuseAllInRank('${rarity}')" ${canAfford ? "" : 'disabled'}>
+                <span class="rfa-label">⚛ Alle (${totalPairs}×)</span>
+                <span class="rfa-cost">${totalCost.toLocaleString("de-DE")} 💰</span>
+              </button>`;
+            })() : ""}
           </div>
           ${open ? `<div class="coll-grid rank-body">${cards}</div>` : ""}
         </div>`;
@@ -1084,6 +1093,7 @@ const UI = {
         if (p2) p2.classList.remove("ep-hidden");
         if (btn) btn.classList.remove("ep-hidden");
         if (p2) setTimeout(() => p2.classList.add("appearing"), 10);
+        UI._modalClosable = true;
       }, 960);
     } else {
       // Multi: erst Ei-Crack-Animation, dann gruppierte Liste
@@ -1126,6 +1136,7 @@ const UI = {
       setTimeout(() => {
         const wrap = document.getElementById("multi-wrap");
         if (wrap) { wrap.className = "egg-multi-reveal"; wrap.innerHTML = buildList(); }
+        UI._modalClosable = true;
       }, 960);
     }
   },

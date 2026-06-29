@@ -203,8 +203,8 @@ const Game = {
     if (!egg) return;
     if (s.playerLevel < egg.minLevel) { UI.toast(`🥚 Erst ab Spieler-Level ${egg.minLevel}!`, "bad"); return; }
     const have = egg.currency === "crystals" ? s.inventory.crystals : s.gold;
-    const max = Math.min(Game.SUMMON_MAX, Math.floor(have / egg.cost));
-    const n = count === "max" ? max : Math.min(count, max);
+    const trueMax = Math.floor(have / egg.cost);
+    const n = count === "max" ? trueMax : Math.min(count, trueMax);
     if (n < 1) { UI.toast(egg.currency === "crystals" ? "Nicht genug Kristalle! 💎" : "Nicht genug Gold! 💰", "bad"); return; }
     const totalCost = egg.cost * n;
     if (egg.currency === "crystals") s.inventory.crystals -= totalCost;
@@ -235,7 +235,7 @@ const Game = {
   summonAffordable(egg) {
     const s = Game.state;
     const have = egg.currency === "crystals" ? s.inventory.crystals : s.gold;
-    return Math.min(Game.SUMMON_MAX, Math.floor(have / egg.cost));
+    return Math.floor(have / egg.cost);
   },
 
   /* ---- Team ---- */
@@ -349,24 +349,24 @@ const Game = {
     }
     s.gold -= totalCost;
 
-    let totalMade = 0, lastFused = null;
-    for (const initGroup of groups) {
-      const g = Game.collectionGroups().find(gr => gr.key === initGroup.key);
-      if (!g || g.count < 2) continue;
-      const members = g.members.slice();
-      const pairs = Math.floor(members.length / 2);
+    const removeIds = new Set();
+    const newMonsters = [];
+    let lastFused = null;
+    for (const g of groups) {
+      const pairs = Math.floor(g.members.length / 2);
       for (let i = 0; i < pairs; i++) {
-        const a = members[2 * i], b = members[2 * i + 1];
-        if (!Monster.canFuse(a, b)) break;
+        const a = g.members[2 * i], b = g.members[2 * i + 1];
+        if (!Monster.canFuse(a, b)) continue;
+        removeIds.add(a.id); removeIds.add(b.id);
         const fused = Monster.fuse(a, b);
-        s.collection = s.collection.filter(m => m.id !== a.id && m.id !== b.id);
-        s.team = s.team.filter(m => m.id !== a.id && m.id !== b.id);
-        Game.addMonster(fused);
-        totalMade++; lastFused = fused;
+        newMonsters.push(fused); lastFused = fused;
       }
     }
-    if (!totalMade) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
-    UI.toast(`⚛ ${totalMade}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    if (!newMonsters.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
+    s.collection = s.collection.filter(m => !removeIds.has(m.id));
+    s.team = s.team.filter(m => !removeIds.has(m.id));
+    for (const m of newMonsters) s.collection.push(m);
+    UI.toast(`⚛ ${newMonsters.length}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
     UI.render();
   },
 
@@ -391,19 +391,23 @@ const Game = {
     }
     s.gold -= totalCost;
 
-    // paarweise fusionieren
     const members = group.members.slice();
-    let made = 0, lastFused = null;
+    const removeIds = new Set();
+    const newMonsters = [];
+    let lastFused = null;
     for (let i = 0; i < p; i++) {
       const a = members[2 * i], b = members[2 * i + 1];
       if (!a || !b || !Monster.canFuse(a, b)) break;
+      removeIds.add(a.id); removeIds.add(b.id);
       const fused = Monster.fuse(a, b);
-      s.collection = s.collection.filter(m => m.id !== a.id && m.id !== b.id);
-      s.team = s.team.filter(m => m.id !== a.id && m.id !== b.id);
-      Game.addMonster(fused);
-      made++; lastFused = fused;
+      newMonsters.push(fused); lastFused = fused;
     }
-    if (made > 0) UI.toast(`⚛ ${made}× Fusion → ${lastFused.name} (${DATA.rarities[lastFused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    if (newMonsters.length) {
+      s.collection = s.collection.filter(m => !removeIds.has(m.id));
+      s.team = s.team.filter(m => !removeIds.has(m.id));
+      for (const m of newMonsters) s.collection.push(m);
+      UI.toast(`⚛ ${newMonsters.length}× Fusion → ${lastFused.name} (${DATA.rarities[lastFused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    }
     UI.render();
   },
 

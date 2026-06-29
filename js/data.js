@@ -137,7 +137,6 @@ DATA.eggTypes = [
   },
   {
     id: "transcend", name: "Transzendenz-Ei", emoji: "🌠", currency: "gold", cost: 1500000, minLevel: 60,
-    // Kein Drop (nur kaufbar)
     table: [
       { rarity: "uralt", chance: 0.40 }, { rarity: "kosmisch", chance: 0.30 },
       { rarity: "titanisch", chance: 0.20 }, { rarity: "transzendent", chance: 0.08 },
