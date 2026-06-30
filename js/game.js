@@ -18,6 +18,7 @@ const Game = {
       inventory: { eggs: { standard: 0, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 }, crystals: 0 },
       avatarKey: Game.groupKey(starterEntry),
       mines: { standard: { owned: false, lastCollect: 0 }, elite: { owned: false, lastCollect: 0 }, goettlich: { owned: false, lastCollect: 0 }, crystal: { owned: false, lastCollect: 0 } },
+      expedition: { level: 1, exp: 0, slots: [null, null, null] },
       enemy: null,
       stage: { current: 1, unlocked: 1, wave: 1, best: {} },
       worldBoss: { level: 1, best: 0 },
@@ -81,6 +82,9 @@ const Game = {
         if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
       }
       if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
+      // Expeditions-Migration: fehlendes Feld initialisieren
+      if (!Game.state.expedition) Game.state.expedition = { level: 1, exp: 0, slots: [null, null, null] };
+      if (!Game.state.expedition.slots) Game.state.expedition.slots = [null, null, null];
       // Ungültige Monster entfernen: unbekanntes Template, unbekannte Seltenheit,
       // oder Seltenheit unter dem Basis-Rang des Templates (z.B. Glutbär auf Normal)
       const _isValid = m => {
@@ -118,6 +122,19 @@ const Game = {
         const entry = Game.state.collection.find(e => e.templateId === tid && e.rarity === rar);
         if (entry) Game.state.avatarKey = Game.groupKey(entry);
       }
+      // Expedition-Slots bereinigen: verwaiste Referenzen (Monster nicht mehr in Sammlung
+      // oder Anzahl durch Migration gesunken) zurückrufen
+      {
+        const claimed = {};
+        Game.state.expedition.slots.forEach((slot, i) => {
+          if (!slot) return;
+          const entry = Game.state.collection.find(e => Game.groupKey(e) === slot.groupKey);
+          claimed[slot.groupKey] = (claimed[slot.groupKey] || 0) + 1;
+          if (!entry || claimed[slot.groupKey] > entry.count) {
+            Game.state.expedition.slots[i] = null;
+          }
+        });
+      }
       // Team-Integrität: ungültige Einträge entfernen; Team hat eigene id/hp Objekte
       Game.state.team = Game.state.team.filter(tm => tm && tm.id);
       // Stage wird beim Laden neu gestartet (Welle 1, Team geheilt)
@@ -128,10 +145,28 @@ const Game = {
     return true; // Erststart
   },
 
+  /* ---- Expeditions-Reservierung ----
+     Monster auf Expedition zählen nicht zur Gesamt-Stärke (Topbar/WorldBoss),
+     können nicht fusioniert oder als Avatar gewählt werden. */
+  reservedCount(groupKey) {
+    const slots = Game.state.expedition?.slots || [];
+    return slots.reduce((n, slot) => (slot && slot.groupKey === groupKey ? n + 1 : n), 0);
+  },
+  /* Frei von Expedition (zählt NICHT Team-Nutzung) — für Fusion/Avatar/WorldBoss */
+  availableCount(entry) {
+    return entry.count - Game.reservedCount(Game.groupKey(entry));
+  },
+  /* Frei von Team UND Expedition — für neue Verpflichtungen (Team hinzufügen / Expedition schicken) */
+  freeCount(entry) {
+    const key = Game.groupKey(entry);
+    const inTeam = Game.state.team.filter(t => Game.groupKey(t) === key).length;
+    return entry.count - inTeam - Game.reservedCount(key);
+  },
+
   /* ---- Gesamt-Stärke der gesamten Sammlung (für Topbar-Anzeige) ---- */
-  totalAttack()  { return Game.state.collection.reduce((s, e) => s + e.attack  * e.count, 0); },
-  totalDefense() { return Game.state.collection.reduce((s, e) => s + e.defense * e.count, 0); },
-  totalHP()      { return Game.state.collection.reduce((s, e) => s + e.maxHp   * e.count, 0); },
+  totalAttack()  { return Game.state.collection.reduce((s, e) => s + e.attack  * Game.availableCount(e), 0); },
+  totalDefense() { return Game.state.collection.reduce((s, e) => s + e.defense * Game.availableCount(e), 0); },
+  totalHP()      { return Game.state.collection.reduce((s, e) => s + e.maxHp   * Game.availableCount(e), 0); },
 
   /* Wie viele identische Monster (gleiche Gruppe) man besitzt */
   groupCount(m) {
@@ -213,9 +248,11 @@ const Game = {
     });
   },
 
-  /* Die n stärksten Monster (für WorldBoss — als Team-ähnliche Objekte) */
+  /* Die n stärksten Monster (für WorldBoss — als Team-ähnliche Objekte).
+     Monster, die komplett auf Expedition sind, werden ausgeschlossen. */
   strongestMonsters(n) {
     return [...Game.state.collection]
+      .filter(e => Game.availableCount(e) > 0)
       .sort((a, b) => (b.attack + b.defense + b.maxHp * 0.1) - (a.attack + a.defense + a.maxHp * 0.1))
       .slice(0, n)
       .map(e => ({ ...e, id: DATA.uid(), hp: e.maxHp, skills: [] }));
@@ -359,8 +396,11 @@ const Game = {
     if (s.team.length >= Game.MAX_TEAM) { UI.toast(`Team voll (max ${Game.MAX_TEAM})!`, "bad"); return; }
     const entry = s.collection.find(e => Game.groupKey(e) === key);
     if (!entry) return;
-    const inTeamCount = s.team.filter(t => Game.groupKey(t) === key).length;
-    if (inTeamCount >= entry.count) { UI.toast("Alle Monster dieser Art bereits im Team!", "bad"); return; }
+    if (Game.freeCount(entry) <= 0) {
+      const onExpedition = Game.reservedCount(key) > 0;
+      UI.toast(onExpedition ? "Dieses Monster ist auf Expedition!" : "Alle Monster dieser Art bereits im Team!", "bad");
+      return;
+    }
     s.team.push({ ...entry, id: DATA.uid(), hp: entry.maxHp, exp: 0, expToNext: 100, skills: [] });
     UI.render();
   },
@@ -413,9 +453,9 @@ const Game = {
     return groups;
   },
 
-  /* Anzahl möglicher Fusionen über alle Gruppen */
+  /* Anzahl möglicher Fusionen über alle Gruppen (Expedition-Monster zählen nicht) */
   possibleFusions() {
-    return Game.collectionGroups().reduce((s, g) => s + Math.floor(g.count / 2), 0);
+    return Game.collectionGroups().reduce((s, g) => s + Math.floor(Game.availableCount(g.sample) / 2), 0);
   },
 
   /* Gold-Kosten für eine Fusion (Ergebnis-Rang entscheidet) */
@@ -440,12 +480,12 @@ const Game = {
   /* Alle fusionierbaren Gruppen eines Rangs auf einmal max-fusionieren */
   fuseAllInRank(rarity) {
     const s = Game.state;
-    const entries = s.collection.filter(e => e.rarity === rarity && e.count >= 2);
+    const entries = s.collection.filter(e => e.rarity === rarity && Game.availableCount(e) >= 2);
     if (!entries.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
 
     const resultRarity = DATA.nextRarity(rarity);
     const costPer = Game.fuseCost(resultRarity);
-    const totalPairs = entries.reduce((sum, e) => sum + Math.floor(e.count / 2), 0);
+    const totalPairs = entries.reduce((sum, e) => sum + Math.floor(Game.availableCount(e) / 2), 0);
     const totalCost = costPer * totalPairs;
     if (s.gold < totalCost) {
       UI.toast(`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 für alle Fusionen benötigt.`, "bad");
@@ -455,7 +495,7 @@ const Game = {
 
     let totalMade = 0, lastFused = null;
     for (const entry of [...entries]) {
-      const pairs = Math.floor(entry.count / 2);
+      const pairs = Math.floor(Game.availableCount(entry) / 2);
       if (pairs < 1) continue;
       lastFused = Game._applyFusion(entry, pairs);
       totalMade += pairs;
@@ -469,9 +509,10 @@ const Game = {
   fuseGroup(key, pairs = 1) {
     const s = Game.state;
     const entry = s.collection.find(e => Game.groupKey(e) === key);
-    if (!entry || entry.count < 2) { UI.toast("Mindestens 2 gleiche Monster nötig.", "bad"); return; }
+    const avail = entry ? Game.availableCount(entry) : 0;
+    if (!entry || avail < 2) { UI.toast("Mindestens 2 freie gleiche Monster nötig (Expedition zählt nicht).", "bad"); return; }
 
-    const maxPairs = Math.floor(entry.count / 2);
+    const maxPairs = Math.floor(avail / 2);
     const p = pairs === "max" ? maxPairs : Math.min(parseInt(pairs, 10) || 1, maxPairs);
     if (p < 1) return;
 
@@ -530,6 +571,109 @@ const Game = {
       s.inventory.eggs[r.id] = (s.inventory.eggs[r.id] || 0) + count;
     }
     UI.toast(`${cfg.emoji} ${count}× ${r.label} ${r.emoji} abgeholt!`, "good");
+    UI.updateTopbar();
+    UI.render();
+  },
+
+  /* ---- Expedition ----
+     Monster wird in einen Slot geschickt (referenziert nur per groupKey, kein Verbrauch),
+     ist währenddessen für Avatar/Team/Fusion/WorldBoss gesperrt (siehe reservedCount/
+     availableCount/freeCount). Länger laufende Expeditionen geben überproportional mehr. */
+  EXPEDITION_DURATIONS: [
+    { id: "1h",  label: "1 Std.",  ms: 1  * 3600_000, mult: 1,    minLevel: 1 },
+    { id: "2h",  label: "2 Std.",  ms: 2  * 3600_000, mult: 2.4,  minLevel: 1 },
+    { id: "6h",  label: "6 Std.",  ms: 6  * 3600_000, mult: 8,    minLevel: 3 },
+    { id: "12h", label: "12 Std.", ms: 12 * 3600_000, mult: 18,   minLevel: 5 },
+    { id: "24h", label: "24 Std.", ms: 24 * 3600_000, mult: 40,   minLevel: 8 },
+  ],
+  EXPEDITION_SLOTS: 3,
+  EXPEDITION_SLOT_LEVELS: [1, 4, 8], // benötigtes Expeditions-Level pro Slot-Index (0-basiert)
+
+  /* Anzahl aktuell freigeschalteter Slots */
+  expeditionSlotsUnlocked(level = Game.state.expedition.level) {
+    return Game.EXPEDITION_SLOT_LEVELS.filter(lv => level >= lv).length;
+  },
+
+  expeditionExpToNext(level) { return Math.round(150 * Math.pow(level, 1.6)); },
+
+  addExpeditionExp(amount) {
+    const e = Game.state.expedition;
+    e.exp = (e.exp || 0) + amount;
+    let ups = 0;
+    while (e.exp >= Game.expeditionExpToNext(e.level)) {
+      e.exp -= Game.expeditionExpToNext(e.level);
+      e.level++;
+      ups++;
+    }
+    if (ups > 0) UI.toast(`🧭 Expeditions-Level ${e.level}! Neue Slots/Laufzeiten könnten freigeschaltet sein.`, "good");
+  },
+
+  /* Reward skaliert mit Rang (exponentiell, wie fuseCost) und Laufzeit-Multiplikator */
+  expeditionReward(rarity, durMult) {
+    const order = DATA.rarities[rarity].order;
+    const gold = Math.round(2000 * Math.pow(1.8, order) * durMult);
+    const playerXp = Math.round(15 * Math.pow(1.5, order) * durMult);
+    const expXp = Math.round(25 * durMult);
+    const eggChance = Math.min(0.95, 0.18 * durMult);
+    const eggTier = order >= 10 ? "goettlich" : order >= 3 ? "elite" : "standard";
+    return { gold, playerXp, expXp, eggChance, eggTier };
+  },
+
+  expeditionSend(slotIdx, groupKey, durationId) {
+    const s = Game.state;
+    const exp = s.expedition;
+    if (slotIdx >= Game.expeditionSlotsUnlocked(exp.level)) {
+      UI.toast(`Slot benötigt Expeditions-Level ${Game.EXPEDITION_SLOT_LEVELS[slotIdx]}!`, "bad");
+      return;
+    }
+    if (exp.slots[slotIdx]) { UI.toast("Slot bereits belegt!", "bad"); return; }
+    const dur = Game.EXPEDITION_DURATIONS.find(d => d.id === durationId);
+    if (!dur) return;
+    if (exp.level < dur.minLevel) { UI.toast(`Benötigt Expeditions-Level ${dur.minLevel}!`, "bad"); return; }
+    const entry = s.collection.find(e => Game.groupKey(e) === groupKey);
+    if (!entry) return;
+    if (Game.freeCount(entry) <= 0) { UI.toast("Kein freies Monster dieser Art (Team/Expedition)!", "bad"); return; }
+    exp.slots[slotIdx] = {
+      groupKey, templateId: entry.templateId, rarity: entry.rarity, name: entry.name,
+      emoji: entry.emoji, element: entry.element,
+      durationId, durationMs: dur.ms, durMult: dur.mult, startTime: Date.now(),
+    };
+    UI.toast(`🧭 ${entry.name} auf Expedition geschickt (${dur.label})!`, "good");
+    UI.updateTopbar();
+    UI.render();
+  },
+
+  expeditionReady(slotIdx) {
+    const slot = Game.state.expedition.slots[slotIdx];
+    if (!slot) return false;
+    return Date.now() - slot.startTime >= slot.durationMs;
+  },
+
+  expeditionClaim(slotIdx) {
+    const s = Game.state;
+    const slot = s.expedition.slots[slotIdx];
+    if (!slot || !Game.expeditionReady(slotIdx)) { UI.toast("Expedition noch nicht abgeschlossen!", "bad"); return; }
+    const r = Game.expeditionReward(slot.rarity, slot.durMult);
+    s.gold += r.gold;
+    Game.addPlayerExp(r.playerXp);
+    Game.addExpeditionExp(r.expXp);
+    let msg = `🧭 ${slot.name} zurück: +${r.gold.toLocaleString("de-DE")} 💰, +${r.playerXp} ⭐`;
+    if (Math.random() < r.eggChance) {
+      s.inventory.eggs[r.eggTier] = (s.inventory.eggs[r.eggTier] || 0) + 1;
+      msg += `, +1 🥚 (${r.eggTier})`;
+    }
+    UI.toast(msg, "good");
+    s.expedition.slots[slotIdx] = null;
+    UI.updateTopbar();
+    UI.render();
+  },
+
+  expeditionRecall(slotIdx) {
+    const s = Game.state;
+    const slot = s.expedition.slots[slotIdx];
+    if (!slot) return;
+    s.expedition.slots[slotIdx] = null;
+    UI.toast(`${slot.name} zurückgerufen — kein Reward.`, "bad");
     UI.updateTopbar();
     UI.render();
   },

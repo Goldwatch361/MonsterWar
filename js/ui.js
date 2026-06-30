@@ -9,7 +9,8 @@ const UI = {
   collOpen: {},         // Rang-Spoiler im Sammlung-Reiter
   dexOpen: {},          // Rang-Spoiler im Dex-Reiter
   monsterTab: "collection", // Unter-Reiter: collection | dex | fusion
-  dashView: "avatar",  // avatar | mine
+  dashView: "avatar",  // avatar | mine | expedition
+  expPickSlot: null,   // welcher Slot gerade im Auswahl-Modal befüllt wird
 
   init() {
     document.querySelectorAll("#tabbar .tab").forEach(btn => {
@@ -85,6 +86,12 @@ const UI = {
     if (UI._mineTimer && UI.dashView !== "mine") {
       clearInterval(UI._mineTimer); UI._mineTimer = null;
     }
+    // Expedition-Timer stoppen wenn Expedition-View verlassen wird
+    if (UI._expTimer && UI.dashView !== "expedition") {
+      clearInterval(UI._expTimer); UI._expTimer = null;
+    }
+    // Sky-Timer immer stoppen; wird unten neu gestartet wenn dashboard/avatar
+    if (UI._skyTimer) { clearInterval(UI._skyTimer); UI._skyTimer = null; }
     UI.updateTopbar();
     const view = document.getElementById("view");
     const sy = window.scrollY; // Scroll-Position merken, damit nichts springt
@@ -92,6 +99,8 @@ const UI = {
       case "dashboard":
         view.innerHTML = UI.renderDashboard();
         if (UI.dashView === "mine" && Game.MINES.some(m => Game.state.mines?.[m.id]?.owned)) UI._startMineTimer();
+        if (UI.dashView === "expedition" && Game.state.expedition.slots.some(Boolean)) UI._startExpeditionTimer();
+        if (UI.dashView === "avatar") { UI._updateSky(); UI._skyTimer = setInterval(UI._updateSky, 10_000); }
         break;
       case "home":      view.innerHTML = UI.renderHome();    UI.refresh(); break;
       case "monster":   view.innerHTML = UI.renderMonster(); break;
@@ -240,6 +249,7 @@ const UI = {
   },
 
   _mineTimer: null,
+  _skyTimer: null,
   _lpTimer: null,
   _dtLast: 0,
   _lpStart() {
@@ -256,6 +266,76 @@ const UI = {
   openMine() {
     UI.dashView = "mine";
     UI.render();
+  },
+
+  openExpedition() {
+    UI.dashView = "expedition";
+    UI.render();
+  },
+
+  _skyColors(h) {
+    // Keyframes: [hour, skyTop, skyMid, horizon, sunOp, moonOp, starOp]
+    const K = [
+      [  0, "#010b1f", "#041640", "#061a5c",  0,    1,    1   ],
+      [  5, "#04102f", "#0d1f5c", "#1a237e",  0,    0.8,  0.9 ],
+      [  6, "#1a237e", "#e64a19", "#ffcc02",  0.15, 0.2,  0   ],
+      [  8, "#0d47a1", "#1e88e5", "#b3e5fc",  0.85, 0,    0   ],
+      [ 12, "#0b3d91", "#42a5f5", "#e3f2fd",  1,    0,    0   ],
+      [ 16, "#0d47a1", "#1e88e5", "#b3e5fc",  0.85, 0,    0   ],
+      [ 18, "#1a237e", "#bf360c", "#ff8f00",  0.15, 0.2,  0   ],
+      [ 20, "#0d1b4e", "#1a237e", "#4a148c",  0,    0.8,  0.5 ],
+      [ 22, "#030c24", "#051436", "#071a5e",  0,    1,    0.9 ],
+      [ 24, "#010b1f", "#041640", "#061a5c",  0,    1,    1   ],
+    ];
+    let i = 0;
+    while (i < K.length - 1 && K[i + 1][0] <= h) i++;
+    const k0 = K[i], k1 = K[Math.min(i + 1, K.length - 1)];
+    const t = k1[0] > k0[0] ? (h - k0[0]) / (k1[0] - k0[0]) : 0;
+    const lh = (ca, cb, t) => {
+      const a = parseInt(ca.slice(1), 16), b = parseInt(cb.slice(1), 16);
+      const r = Math.round(((a>>16)&0xff) + (((b>>16)&0xff)-((a>>16)&0xff))*t);
+      const g = Math.round(((a>>8)&0xff)  + (((b>>8)&0xff) -((a>>8)&0xff)) *t);
+      const bl= Math.round((a&0xff)       + ((b&0xff)       -(a&0xff))      *t);
+      return `rgb(${r},${g},${bl})`;
+    };
+    const lr = (a, b, t) => a + (b - a) * t;
+    const tSun  = Math.max(0, Math.min(1, (h - 6) / 12));
+    const tMoon = h >= 18 ? (h - 18) / 12 : (h + 6) / 12;
+    return {
+      skyTop:  lh(k0[1], k1[1], t),
+      skyMid:  lh(k0[2], k1[2], t),
+      horizon: lh(k0[3], k1[3], t),
+      sunOp:   lr(k0[4], k1[4], t),
+      moonOp:  lr(k0[5], k1[5], t),
+      starOp:  lr(k0[6], k1[6], t),
+      // Tiefpunkt (t=0/1) liegt hinter den Mittel-/Nahbergen (y~420-440) statt in der
+      // sichtbaren Lücke zwischen den Bergketten — Berge werden nach Sonne/Mond gezeichnet
+      // und verdecken sie so beim Auf-/Untergehen statt nur per Opacity auszublenden.
+      sunX: Math.round(30  + 340 * tSun),
+      sunY: Math.round(440 - 380 * Math.sin(Math.PI * tSun)),
+      moonX: Math.round(30  + 340 * tMoon),
+      moonY: Math.round(440 - 380 * Math.sin(Math.PI * tMoon)),
+    };
+  },
+
+  _updateSky() {
+    const svg = document.querySelector(".home-bg");
+    if (!svg) { clearInterval(UI._skyTimer); UI._skyTimer = null; return; }
+    const now = new Date();
+    const h = (now.getMinutes() + now.getSeconds() / 60) / 60 * 24;
+    const c = UI._skyColors(h);
+    const stops = svg.querySelectorAll("#hsky stop");
+    if (stops[0]) stops[0].style.stopColor = c.skyTop;
+    if (stops[1]) stops[1].style.stopColor = c.skyMid;
+    if (stops[2]) stops[2].style.stopColor = c.horizon;
+    const sunG = svg.querySelector(".sky-sun");
+    if (sunG) { sunG.setAttribute("transform", `translate(${c.sunX},${c.sunY})`); sunG.setAttribute("opacity", c.sunOp.toFixed(3)); }
+    const moonG = svg.querySelector(".sky-moon");
+    if (moonG) { moonG.setAttribute("transform", `translate(${c.moonX},${c.moonY})`); moonG.setAttribute("opacity", c.moonOp.toFixed(3)); }
+    const stars = svg.querySelector(".sky-stars");
+    if (stars) stars.setAttribute("opacity", c.starOp.toFixed(3));
+    const clouds = svg.querySelector(".sky-clouds");
+    if (clouds) clouds.setAttribute("opacity", Math.max(0.15, 1 - c.starOp * 0.85).toFixed(3));
   },
 
   _startMineTimer() {
@@ -357,22 +437,188 @@ const UI = {
       </div>`;
   },
 
+  /* ---- Expedition ---- */
+  _expCd(slotIdx) {
+    const slot = Game.state.expedition.slots[slotIdx];
+    if (!slot) return { ready: false, pct: 0, text: "—" };
+    const elapsed = Date.now() - slot.startTime;
+    const total = slot.durationMs;
+    const pct = Math.min(100, (elapsed / total) * 100);
+    const ready = elapsed >= total;
+    const remaining = Math.max(0, total - elapsed);
+    const h = Math.floor(remaining / 3600000);
+    const mm = Math.floor((remaining % 3600000) / 60000);
+    const sec = Math.floor((remaining % 60000) / 1000);
+    const text = ready ? "Fertig!" : (h > 0
+      ? `${h}:${String(mm).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
+      : `${mm}:${String(sec).padStart(2,"0")}`);
+    return { ready, pct, text };
+  },
+
+  _startExpeditionTimer() {
+    if (UI._expTimer) clearInterval(UI._expTimer);
+    UI._expTimer = setInterval(() => {
+      let anyVisible = false;
+      for (let i = 0; i < Game.EXPEDITION_SLOTS; i++) {
+        const el = document.getElementById(`exp-cd-${i}`);
+        if (!el) continue;
+        anyVisible = true;
+        const cd = UI._expCd(i);
+        const fill = document.getElementById(`exp-fill-${i}`);
+        const btn  = document.getElementById(`exp-btn-${i}`);
+        el.textContent = cd.text;
+        el.className = `mc-timer mine-countdown ${cd.ready ? "mine-cd-ready" : ""}`;
+        if (fill) fill.style.width = cd.pct + "%";
+        if (btn) {
+          btn.disabled = !cd.ready;
+          btn.textContent = cd.ready ? "🎁 Abholen" : "⏳ Unterwegs";
+          btn.className = `btn ${cd.ready ? "good" : "ghost"} mc-collect-btn`;
+        }
+      }
+      if (!anyVisible) { clearInterval(UI._expTimer); UI._expTimer = null; }
+    }, 1000);
+  },
+
+  renderExpedition() {
+    const s = Game.state;
+    const exp = s.expedition;
+    const need = Game.expeditionExpToNext(exp.level);
+    const pct = Math.max(0, Math.min(100, ((exp.exp || 0) / need) * 100));
+
+    const unlockedCount = Game.expeditionSlotsUnlocked(exp.level);
+    const slots = [];
+    for (let i = 0; i < Game.EXPEDITION_SLOTS; i++) {
+      const slot = exp.slots[i];
+      const locked = !slot && i >= unlockedCount;
+      let body, mcolor;
+      if (locked) {
+        mcolor = "#5a5f72";
+        body = `
+          <div class="exp-empty">
+            <div class="exp-empty-icon">🔒</div>
+            <div class="mc-sub">Benötigt Expeditions-Level ${Game.EXPEDITION_SLOT_LEVELS[i]}</div>
+          </div>`;
+      } else if (!slot) {
+        mcolor = "#9aa4bf";
+        body = `
+          <div class="exp-empty">
+            <div class="exp-empty-icon">🧭</div>
+            <div class="mc-sub">Slot frei</div>
+            <button class="btn good mc-buy-btn" onclick="UI.openExpeditionPicker(${i})">Monster schicken</button>
+          </div>`;
+      } else {
+        const cd = UI._expCd(i);
+        const rc = UI.rarColor(slot.rarity);
+        const dur = Game.EXPEDITION_DURATIONS.find(d => d.id === slot.durationId);
+        mcolor = rc;
+        body = `
+          <div class="mc-header">
+            <span class="mc-emoji ${cd.ready ? "mine-ready-pulse" : ""}">${slot.emoji}</span>
+            <div class="mc-title">
+              <div class="mc-name" style="color:${rc}">${slot.name}</div>
+              <div class="mc-sub">${DATA.rarities[slot.rarity].name} · ${dur ? dur.label : ""}</div>
+            </div>
+          </div>
+          <div class="mc-bar-row">
+            <div class="mc-bar"><div class="mc-fill" id="exp-fill-${i}" style="width:${cd.pct}%;background:${rc}"></div></div>
+            <span class="mc-timer mine-countdown ${cd.ready ? "mine-cd-ready" : ""}" id="exp-cd-${i}">${cd.text}</span>
+          </div>
+          <div class="btn-row" style="margin-top:8px">
+            <button class="btn ${cd.ready ? "good" : "ghost"} mc-collect-btn" id="exp-btn-${i}"
+                    onclick="Game.expeditionClaim(${i})" ${cd.ready ? "" : "disabled"}>
+              ${cd.ready ? "🎁 Abholen" : "⏳ Unterwegs"}
+            </button>
+            <button class="btn bad sm" onclick="Game.expeditionRecall(${i})" title="Zurückrufen (kein Reward)">✕</button>
+          </div>`;
+      }
+      slots.push(`
+        <div class="mine-card ${slot ? "mc-owned" : "mc-buyable"} ${locked ? "exp-locked" : ""}" style="--mcolor:${mcolor}">
+          <div class="mc-body">${body}</div>
+        </div>`);
+    }
+
+    return `
+      <div class="panel">
+        <div class="mode-bar">
+          <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
+        </div>
+        <h2>🧭 Expedition</h2>
+        <div class="kv"><span>Expeditions-Level ${exp.level}</span><b>${Math.floor(exp.exp || 0)} / ${need} XP</b></div>
+        <div class="mc-bar" style="margin-bottom:14px"><div class="mc-fill" style="width:${pct}%;background:#6ee7b7"></div></div>
+        <p class="hint" style="text-align:left;padding:0 0 8px">Geschickte Monster sind solange nicht als Avatar, im Team, in Stage-/WorldBoss-Kämpfen oder zum Fusionieren verfügbar.</p>
+        <div class="mines-grid">${slots.join("")}</div>
+      </div>`;
+  },
+
+  openExpeditionPicker(slotIdx) {
+    if (slotIdx >= Game.expeditionSlotsUnlocked(Game.state.expedition.level)) {
+      UI.toast(`Slot benötigt Expeditions-Level ${Game.EXPEDITION_SLOT_LEVELS[slotIdx]}!`, "bad");
+      return;
+    }
+    UI.expPickSlot = slotIdx;
+    const groups = Game.collectionGroups().filter(g => Game.freeCount(g.sample) > 0);
+    const cards = groups.map(g => {
+      const m = g.sample;
+      const rc = UI.rarColor(m.rarity);
+      return `
+        <div class="av-pick-card ${UI.glowClass(m.rarity)}" style="--rcolor:${rc}" onclick="UI.openExpeditionDuration('${g.key}')">
+          <div class="av-pick-emoji">${m.emoji}</div>
+          <div class="av-pick-rar" style="color:${rc}">${DATA.rarities[m.rarity].name.slice(0,4)}</div>
+          <div class="av-pick-name">${m.name}</div>
+        </div>`;
+    }).join("");
+    UI.modal(`
+      <h3 style="margin:0 0 14px;font-size:16px">🧭 Monster für Expedition wählen</h3>
+      <div class="av-pick-grid">${cards || '<div class="hint">Keine freien Monster verfügbar — alle im Team oder bereits auf Expedition.</div>'}</div>
+      <button class="btn ghost" style="margin-top:14px" onclick="UI.closeModal()">Abbrechen</button>
+    `);
+  },
+
+  openExpeditionDuration(groupKey) {
+    const entry = Game.state.collection.find(e => Game.groupKey(e) === groupKey);
+    if (!entry) return;
+    const exp = Game.state.expedition;
+    const rc = UI.rarColor(entry.rarity);
+    const opts = Game.EXPEDITION_DURATIONS.map(d => {
+      const locked = exp.level < d.minLevel;
+      const r = Game.expeditionReward(entry.rarity, d.mult);
+      return `
+        <button class="btn ${locked ? "ghost" : "good"} sm" style="width:100%;margin-bottom:6px;justify-content:space-between;display:flex"
+                onclick="${locked ? "" : `Game.expeditionSend(${UI.expPickSlot},'${groupKey}','${d.id}');UI.closeModal()`}"
+                ${locked ? "disabled" : ""}>
+          <span>${d.label}</span>
+          <span>${locked ? `🔒 Lvl ${d.minLevel}` : `💰${UI.fmt(r.gold)} · ⭐${r.playerXp}`}</span>
+        </button>`;
+    }).join("");
+    UI.modal(`
+      <h3 style="margin:0 0 6px;font-size:16px">${entry.emoji} ${entry.name}</h3>
+      <div class="mmeta" style="margin-bottom:14px;color:${rc}">${DATA.rarities[entry.rarity].name} — Laufzeit wählen</div>
+      ${opts}
+      <button class="btn ghost" style="margin-top:8px" onclick="UI.closeModal()">Abbrechen</button>
+    `);
+  },
+
   renderDashboard() {
     if (UI.dashView === "mine") return UI.renderMine();
+    if (UI.dashView === "expedition") return UI.renderExpedition();
     if (UI._mineTimer) { clearInterval(UI._mineTimer); UI._mineTimer = null; }
     const s = Game.state;
-    const avatar = s.collection.find(e => Game.groupKey(e) === s.avatarKey) || s.collection[0] || null;
+    const avatar = s.collection.find(e => Game.groupKey(e) === s.avatarKey && Game.availableCount(e) > 0)
+      || s.collection.find(e => Game.availableCount(e) > 0)
+      || s.collection[0] || null;
     if (!avatar) return `<div class="home-avatar-wrap"><svg class="home-bg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice"><rect width="400" height="700" fill="#64b5f6"/></svg><div class="hint" style="position:relative;z-index:1;text-align:center;padding:40px 0">Noch keine Monster — beschwöre dein erstes!</div></div>`;
     const rc = UI.rarColor(avatar.rarity);
     const rar = DATA.rarities[avatar.rarity];
+    const _now = new Date();
+    const _h0 = (_now.getMinutes() + _now.getSeconds() / 60) / 60 * 24;
+    const _ic = UI._skyColors(_h0);
+    const _cOp = Math.max(0.15, 1 - _ic.starOp * 0.85).toFixed(3);
     const bg = `<svg class="home-bg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 700" preserveAspectRatio="xMidYMid slice">
   <defs>
     <linearGradient id="hsky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#0d47a1"/>
-      <stop offset="38%"  stop-color="#0288d1"/>
-      <stop offset="70%"  stop-color="#4fc3f7"/>
-      <stop offset="88%"  stop-color="#b3e5fc"/>
-      <stop offset="100%" stop-color="#e8f4fd"/>
+      <stop offset="0%"   style="stop-color:${_ic.skyTop}"/>
+      <stop offset="50%"  style="stop-color:${_ic.skyMid}"/>
+      <stop offset="100%" style="stop-color:${_ic.horizon}"/>
     </linearGradient>
     <radialGradient id="hsun" cx="50%" cy="50%" r="50%">
       <stop offset="0%"   stop-color="#ffffff"/>
@@ -380,45 +626,66 @@ const UI = {
       <stop offset="50%"  stop-color="#ffe082" stop-opacity=".55"/>
       <stop offset="100%" stop-color="#ff6f00" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="hhaze" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#e1f5fe" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#fffde7" stop-opacity=".3"/>
-    </linearGradient>
+    <radialGradient id="hmoon" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#e8eaf6"/>
+      <stop offset="60%"  stop-color="#c5cae9" stop-opacity=".6"/>
+      <stop offset="100%" stop-color="#7986cb" stop-opacity="0"/>
+    </radialGradient>
   </defs>
   <!-- Sky -->
   <rect width="400" height="700" fill="url(#hsky)"/>
-  <!-- Warm horizon haze -->
-  <rect y="380" width="400" height="320" fill="url(#hhaze)"/>
+  <!-- Stars -->
+  <g class="sky-stars" opacity="${_ic.starOp.toFixed(3)}">
+    <circle cx="30"  cy="25"  r="1.5" fill="white"/><circle cx="70"  cy="42"  r="1"   fill="white"/>
+    <circle cx="110" cy="16"  r="2"   fill="white"/><circle cx="155" cy="50"  r="1.5" fill="white"/>
+    <circle cx="192" cy="22"  r="1"   fill="white"/><circle cx="235" cy="44"  r="2"   fill="white"/>
+    <circle cx="272" cy="28"  r="1.5" fill="white"/><circle cx="312" cy="18"  r="1"   fill="white"/>
+    <circle cx="352" cy="46"  r="2"   fill="white"/><circle cx="50"  cy="72"  r="1"   fill="white"/>
+    <circle cx="132" cy="82"  r="1.5" fill="white"/><circle cx="202" cy="66"  r="1"   fill="white"/>
+    <circle cx="282" cy="76"  r="2"   fill="white"/><circle cx="342" cy="68"  r="1.5" fill="white"/>
+    <circle cx="82"  cy="108" r="1"   fill="white"/><circle cx="172" cy="98"  r="1.5" fill="white"/>
+    <circle cx="242" cy="112" r="1"   fill="white"/><circle cx="322" cy="92"  r="2"   fill="white"/>
+  </g>
+  <!-- Moon -->
+  <g class="sky-moon" transform="translate(${_ic.moonX},${_ic.moonY})" opacity="${_ic.moonOp.toFixed(3)}">
+    <circle r="42" fill="url(#hmoon)"/>
+    <circle r="20" fill="#e8eaf6" opacity=".9"/>
+    <circle r="16" fill="#ffffff"/>
+  </g>
   <!-- Sun -->
-  <circle cx="312" cy="82" r="72" fill="url(#hsun)"/>
-  <circle cx="312" cy="82" r="28" fill="#fffde7" opacity=".96"/>
-  <circle cx="312" cy="82" r="18" fill="#ffffff"/>
-  <!-- Wispy cirrus clouds (horizontal, not cartoon) -->
-  <ellipse cx="88"  cy="82"  rx="72" ry="11" fill="white" opacity=".70"/>
-  <ellipse cx="55"  cy="87"  rx="42" ry="7"  fill="white" opacity=".50"/>
-  <ellipse cx="130" cy="78"  rx="48" ry="8"  fill="white" opacity=".55"/>
-  <ellipse cx="92"  cy="72"  rx="36" ry="7"  fill="white" opacity=".40"/>
-  <ellipse cx="228" cy="110" rx="82" ry="12" fill="white" opacity=".62"/>
-  <ellipse cx="192" cy="116" rx="52" ry="8"  fill="white" opacity=".48"/>
-  <ellipse cx="268" cy="106" rx="56" ry="9"  fill="white" opacity=".52"/>
-  <ellipse cx="232" cy="100" rx="42" ry="7"  fill="white" opacity=".38"/>
-  <ellipse cx="152" cy="50"  rx="62" ry="7"  fill="white" opacity=".35"/>
-  <ellipse cx="118" cy="54"  rx="38" ry="5"  fill="white" opacity=".25"/>
-  <ellipse cx="188" cy="46"  rx="44" ry="6"  fill="white" opacity=".28"/>
-  <!-- Far mountains — atmospheric blue-gray haze (depth illusion) -->
+  <g class="sky-sun" transform="translate(${_ic.sunX},${_ic.sunY})" opacity="${_ic.sunOp.toFixed(3)}">
+    <circle r="72" fill="url(#hsun)"/>
+    <circle r="28" fill="#fffde7" opacity=".96"/>
+    <circle r="18" fill="#ffffff"/>
+  </g>
+  <!-- Clouds -->
+  <g class="sky-clouds" opacity="${_cOp}">
+    <ellipse cx="88"  cy="82"  rx="72" ry="11" fill="white" opacity=".70"/>
+    <ellipse cx="55"  cy="87"  rx="42" ry="7"  fill="white" opacity=".50"/>
+    <ellipse cx="130" cy="78"  rx="48" ry="8"  fill="white" opacity=".55"/>
+    <ellipse cx="92"  cy="72"  rx="36" ry="7"  fill="white" opacity=".40"/>
+    <ellipse cx="228" cy="110" rx="82" ry="12" fill="white" opacity=".62"/>
+    <ellipse cx="192" cy="116" rx="52" ry="8"  fill="white" opacity=".48"/>
+    <ellipse cx="268" cy="106" rx="56" ry="9"  fill="white" opacity=".52"/>
+    <ellipse cx="232" cy="100" rx="42" ry="7"  fill="white" opacity=".38"/>
+    <ellipse cx="152" cy="50"  rx="62" ry="7"  fill="white" opacity=".35"/>
+    <ellipse cx="118" cy="54"  rx="38" ry="5"  fill="white" opacity=".25"/>
+    <ellipse cx="188" cy="46"  rx="44" ry="6"  fill="white" opacity=".28"/>
+  </g>
+  <!-- Far mountains -->
   <path d="M-10,345 C28,268 66,294 106,248 C144,204 180,240 218,210 C256,180 292,220 330,192 C358,170 385,198 410,184 L410,700 L-10,700Z" fill="#78909c" opacity=".45"/>
-  <!-- Mid mountains — cooler muted tones -->
+  <!-- Mid mountains -->
   <path d="M-10,418 C32,345 70,368 112,320 C152,275 188,308 226,278 C264,248 300,282 338,255 C366,234 390,258 410,244 L410,700 L-10,700Z" fill="#4e6b52" opacity=".72"/>
-  <!-- Near ridge — deeper green -->
+  <!-- Near ridge -->
   <path d="M-10,498 C44,438 90,456 148,430 C204,406 250,428 306,410 C346,396 382,412 410,402 L410,700 L-10,700Z" fill="#2e5c1e" opacity=".92"/>
   <!-- Foreground dark hills -->
   <path d="M-10,565 C58,520 118,536 200,524 C280,512 352,530 410,517 L410,700 L-10,700Z" fill="#1a3d0c"/>
   <!-- Ground -->
   <rect y="625" width="400" height="75" fill="#122a08"/>
-  <!-- Atmospheric depth haze between ridges -->
+  <!-- Atmospheric depth haze -->
   <ellipse cx="200" cy="448" rx="260" ry="22" fill="#b3e5fc" opacity=".18"/>
   <ellipse cx="200" cy="505" rx="250" ry="16" fill="#c8e6c9" opacity=".16"/>
-  <!-- Pine silhouettes on near ridge -->
+  <!-- Pine silhouettes -->
   <path d="M48,428  L57,388  L66,428Z"  fill="#122a08"/>
   <path d="M51,412  L57,380  L63,412Z"  fill="#122a08"/>
   <path d="M118,420 L127,382 L136,420Z" fill="#122a08"/>
@@ -428,13 +695,21 @@ const UI = {
   <path d="M372,418 L380,384 L388,418Z" fill="#122a08"/>
   <path d="M374,403 L380,375 L386,403Z" fill="#122a08"/>
 </svg>`;
+    const _expReady = s.expedition.slots.reduce((n, slot, i) => n + (slot && Game.expeditionReady(i) ? 1 : 0), 0);
     return `
       <div class="home-avatar-wrap">
         ${bg}
-        <button class="home-side-btn" onclick="UI.openMine()">
-          <span class="hsb-icon">⛏️</span>
-          <span class="hsb-label">Mine</span>
-        </button>
+        <div class="home-side-stack">
+          <button class="home-side-btn" onclick="UI.openMine()">
+            <span class="hsb-icon">⛏️</span>
+            <span class="hsb-label">Mine</span>
+          </button>
+          <button class="home-side-btn" onclick="UI.openExpedition()">
+            <span class="hsb-icon">🧭</span>
+            <span class="hsb-label">Expedition</span>
+            ${_expReady ? `<span class="hsb-badge">${_expReady}</span>` : ""}
+          </button>
+        </div>
         <div class="home-av-float ${UI.glowClass(avatar.rarity)}" style="--rcolor:${rc}"
              onmousedown="UI._lpStart()" onmouseup="UI._lpCancel()" onmouseleave="UI._lpCancel()"
              ontouchstart="UI._lpStart()" ontouchend="UI._lpCancel()" ontouchmove="UI._lpCancel()">
@@ -451,7 +726,7 @@ const UI = {
 
   openAvatarPicker() {
     const s = Game.state;
-    const groups = Game.collectionGroups();
+    const groups = Game.collectionGroups().filter(g => Game.availableCount(g.sample) > 0);
     const cards = groups.map(g => {
       const m = g.sample;
       const rc = UI.rarColor(m.rarity);
@@ -466,12 +741,14 @@ const UI = {
     }).join("");
     UI.modal(`
       <h3 style="margin:0 0 14px;font-size:16px">🐾 Avatar wählen</h3>
-      <div class="av-pick-grid">${cards}</div>
+      <div class="av-pick-grid">${cards || '<div class="hint">Keine verfügbaren Monster — alle auf Expedition.</div>'}</div>
       <button class="btn ghost" style="margin-top:14px" onclick="UI.closeModal()">Schließen</button>
     `);
   },
 
   setAvatar(key) {
+    const entry = Game.state.collection.find(e => Game.groupKey(e) === key);
+    if (!entry || Game.availableCount(entry) <= 0) { UI.toast("Dieses Monster ist auf Expedition!", "bad"); return; }
     Game.state.avatarKey = key;
     UI.closeModal();
     UI.render();
@@ -525,9 +802,15 @@ const UI = {
     const rows = sorted.map(g => {
       const m = g.sample;
       const inTeam = s.team.filter(t => Game.groupKey(t) === g.key).length;
-      const canAdd = inTeam < g.count && !full;
+      const reserved = Game.reservedCount(g.key);
+      const canAdd = Game.freeCount(g.sample) > 0 && !full;
       const canClick = inTeam > 0 || canAdd;
       const clickFn = inTeam > 0 ? `Game.teamRemoveFromGroup('${g.key}')` : `Game.teamAddFromGroup('${g.key}')`;
+      const meta = inTeam > 0
+        ? `<span class="tsr-inteam">✓ ${inTeam}</span>`
+        : reserved >= g.count
+          ? `<span style="color:var(--bad)">🧭 unterwegs</span>`
+          : `<span style="color:var(--muted)">×${g.count - reserved}${reserved ? ` (🧭${reserved})` : ""}</span>`;
       return `
         <div class="tsel-row ${m.fused ? "fused" : ""} ${UI.glowClass(m.rarity)} ${inTeam > 0 ? "in-team" : ""} ${!canClick ? "tsel-disabled" : ""}"
              style="--rcolor:${UI.rarColor(m.rarity)}" onclick="${canClick ? clickFn : ''}">
@@ -540,7 +823,7 @@ const UI = {
             <span>⚔️ ${UI.fmt(m.attack)}</span>
             <span>🛡️ ${UI.fmt(m.defense)}</span>
           </div>
-          <div class="tsr-meta">${inTeam > 0 ? `<span class="tsr-inteam">✓ ${inTeam}</span>` : `<span style="color:var(--muted)">×${g.count}</span>`}</div>
+          <div class="tsr-meta">${meta}</div>
         </div>`;
     }).join("");
 
@@ -754,6 +1037,7 @@ const UI = {
   monGroupCard(g) {
     const m = g.sample;
     const rc = UI.rarColor(m.rarity);
+    const reserved = Game.reservedCount(g.key);
     return `
       <div class="mon ${m.fused ? "fused" : ""} ${UI.glowClass(m.rarity)}" style="--rcolor:${rc}">
         <div class="count-badge">×${g.count}</div>
@@ -761,7 +1045,7 @@ const UI = {
           <div class="memoji">${m.emoji}</div>
           <div>
             <div class="mname">${m.name}</div>
-            <div class="mmeta"><span class="rarity">${DATA.rarities[m.rarity].name}</span></div>
+            <div class="mmeta"><span class="rarity">${DATA.rarities[m.rarity].name}</span>${reserved ? ` · 🧭 ${reserved} unterwegs` : ""}</div>
           </div>
         </div>
         <div class="mmeta" style="margin-top:4px">${UI.elChip(m.element)}</div>
@@ -971,11 +1255,13 @@ const UI = {
       const list = byRank[rarity];
       const rc = UI.rarColor(rarity);
       const open = !!UI.fusionOpen[rarity];
-      const fuseableCount = list.filter(g => g.count >= 2).length;
+      const fuseableCount = list.filter(g => Game.availableCount(g.sample) >= 2).length;
 
       const cards = list.map(g => {
         const m = g.sample;
-        const maxPairs = Math.floor(g.count / 2);
+        const reserved = Game.reservedCount(g.key);
+        const avail = Game.availableCount(g.sample);
+        const maxPairs = Math.floor(avail / 2);
         const canFuse = maxPairs >= 1;
         let options = "";
         for (let p = 1; p <= maxPairs; p++) options += `<option value="${p}">${p}×</option>`;
@@ -992,7 +1278,7 @@ const UI = {
               <div class="memoji">${m.emoji}</div>
               <div>
                 <div class="mname">${m.name}</div>
-                <div class="mmeta"><span class="rarity">${DATA.rarities[m.rarity].name}</span></div>
+                <div class="mmeta"><span class="rarity">${DATA.rarities[m.rarity].name}</span>${reserved ? ` · 🧭 ${reserved} auf Expedition` : ""}</div>
               </div>
             </div>
             <div class="stats">
@@ -1005,7 +1291,7 @@ const UI = {
                 <button class="btn sm good" onclick="UI.doFuse(${i})" ${canAffordOne ? "" : "disabled"}>⚛ Fusionieren</button>
               </div>
               <div class="mmeta">→ ${DATA.rarities[resultRarity].name} · <span style="color:var(--gold)">${fuseCostPer.toLocaleString("de-DE")} 💰</span></div>`
-              : `<div class="mmeta" style="margin-top:8px">Nur 1× — keine Fusion möglich</div>`}
+              : `<div class="mmeta" style="margin-top:8px">${avail < 1 ? "Auf Expedition — keine Fusion möglich" : "Nur 1× frei — keine Fusion möglich"}</div>`}
           </div>`;
       }).join("");
 
@@ -1018,7 +1304,7 @@ const UI = {
               <span class="rh-arrow">${open ? "▲" : "▼"}</span>
             </button>
             ${fuseableCount ? (() => {
-              const totalPairs = list.filter(g=>g.count>=2).reduce((s,g)=>s+Math.floor(g.count/2),0);
+              const totalPairs = list.reduce((s,g)=>s+Math.floor(Game.availableCount(g.sample)/2),0);
               const totalCost  = Game.fuseCost(DATA.nextRarity(rarity)) * totalPairs;
               const canAfford  = Game.state.gold >= totalCost;
               return `<button class="btn sm good rank-fuse-all${canAfford ? "" : " fuse-all-broke"}" onclick="Game.fuseAllInRank('${rarity}')" ${canAfford ? "" : 'disabled'}>
