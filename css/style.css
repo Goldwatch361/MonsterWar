@@ -737,6 +737,8 @@ button { font-family: inherit; cursor: pointer; }
   cursor: pointer; user-select: none; position: relative;
 }
 .home-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.home-bg .sky-sun, .home-bg .sky-moon, .home-bg .sky-stars, .home-bg .sky-clouds { transition: opacity 8s ease; }
+.home-bg #hsky stop { transition: stop-color 8s ease; }
 .home-av-info { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
 @keyframes homeFloat {
   0%, 100% { transform: translateY(0); }
@@ -879,10 +881,18 @@ button { font-family: inherit; cursor: pointer; }
 .mc-collect-btn, .mc-buy-btn { width: 100%; }
 .mc-buy-desc { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 
-/* Side-Buttons auf dem Home-Bildschirm (Mine, etc.) */
-.home-side-btn {
+.exp-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0; }
+.exp-empty-icon { font-size: 34px; opacity: .55; }
+.mine-card.exp-locked { opacity: .5; filter: grayscale(.6); }
+
+/* Side-Buttons auf dem Home-Bildschirm (Mine, Expedition, etc.) */
+.home-side-stack {
   position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-  z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  z-index: 2; display: flex; flex-direction: column; gap: 14px;
+}
+.home-side-btn {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   background: rgba(0,0,0,.38); backdrop-filter: blur(6px);
   border: 1px solid rgba(255,255,255,.18); border-radius: 14px;
   padding: 12px 10px; color: #fff; cursor: pointer;
@@ -890,9 +900,16 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 4px 14px rgba(0,0,0,.35);
 }
 .home-side-btn:hover  { background: rgba(0,0,0,.55); }
-.home-side-btn:active { transform: translateY(-50%) scale(.93); }
+.home-side-btn:active { transform: scale(.93); }
 .hsb-icon  { font-size: 28px; line-height: 1; }
 .hsb-label { font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; opacity: .85; }
+.hsb-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #ff5252; color: #fff; font-size: 10px; font-weight: 800;
+  min-width: 16px; height: 16px; border-radius: 8px; padding: 0 3px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.4);
+}
 
 /* Avatar Picker Modal */
 .av-pick-grid {
