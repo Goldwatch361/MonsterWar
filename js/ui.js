@@ -11,6 +11,8 @@ const UI = {
   monsterTab: "collection", // Unter-Reiter: collection | dex | fusion
   dashView: "avatar",  // avatar | mine | expedition | profile
   expPickSlot: null,   // welcher Slot gerade im Auswahl-Modal befüllt wird
+  stageChapterOpen: {}, // welche Stage-Kapitel in der Stage-Auswahl aufgeklappt sind
+  STAGE_CHAPTER_SIZE: 50,
 
   init() {
     document.querySelectorAll("#tabbar .tab").forEach(btn => {
@@ -842,7 +844,6 @@ const UI = {
           <div class="home-av-rar" style="color:${rc}">${rar.name}</div>
           <div class="home-av-hint">Doppeltippen oder 2 Sek. halten zum Ändern</div>
         </div>
-        <div class="home-version">v${Game.VERSION}</div>
       </div>`;
   },
 
@@ -982,29 +983,85 @@ const UI = {
   },
 
   /* Stage-Auswahl (nach Team-Wahl) — kompakte Kachel-Ansicht */
+  toggleStageChapter(idx) {
+    UI.stageChapterOpen[idx] = !UI.stageChapterOpen[idx];
+    UI.render();
+  },
+
+  jumpToStage() {
+    const input = document.getElementById("stage-jump-input");
+    const n = parseInt(input?.value, 10);
+    const unlocked = Game.state.stage.unlocked;
+    if (!n || n < 1 || n > unlocked) { UI.toast(`Bitte Stage 1–${unlocked.toLocaleString("de-DE")} eingeben`, "bad"); return; }
+    const size = UI.STAGE_CHAPTER_SIZE;
+    UI.stageChapterOpen[Math.floor((n - 1) / size)] = true;
+    UI.render();
+    requestAnimationFrame(() => {
+      document.getElementById("stg-tile-" + n)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  },
+
   renderStageSelect() {
     const s = Game.state;
     const st = s.stage;
     const W = Battle.WAVES_PER_STAGE;
     const frontier = st.unlocked;
+    const size = UI.STAGE_CHAPTER_SIZE;
 
-    let tiles = "";
-    for (let i = 1; i <= st.unlocked; i++) {
+    const tileHtml = (i) => {
       const best = st.best[i] || 0;
       const cleared = best >= W;
       const isF = i === frontier && !cleared;
       const status = isF ? "🚩" : cleared ? "✓" : (best ? `${best}/${W}` : "·");
-      tiles += `<button class="stage-tile ${cleared ? "cleared" : ""} ${isF ? "frontier" : ""}" onclick="Game.startStageRun(${i})" title="Stage ${i} · Lv ${(i - 1) * W + 1}–${i * W}">
+      return `<button class="stage-tile ${cleared ? "cleared" : ""} ${isF ? "frontier" : ""}" id="stg-tile-${i}" onclick="Game.startStageRun(${i})" title="Stage ${i} · Lv ${(i - 1) * W + 1}–${i * W}">
           <span class="st-num">${i}</span><span class="st-stat">${status}</span></button>`;
+    };
+
+    let chaptersHtml;
+    if (frontier <= size) {
+      // Wenige Stages: flache Liste ohne Kapitel-Overhead
+      let tiles = "";
+      for (let i = 1; i <= frontier; i++) tiles += tileHtml(i);
+      chaptersHtml = `<div class="stage-tiles">${tiles}</div>`;
+    } else {
+      const chapterCount = Math.ceil(frontier / size);
+      const frontierChapter = Math.floor((frontier - 1) / size);
+      const chapters = [];
+      for (let c = chapterCount - 1; c >= 0; c--) {
+        const start = c * size + 1;
+        const end = Math.min((c + 1) * size, frontier);
+        let clearedCount = 0;
+        for (let i = start; i <= end; i++) if ((st.best[i] || 0) >= W) clearedCount++;
+        const isFrontierChapter = c === frontierChapter;
+        const allCleared = clearedCount >= (end - start + 1);
+        const open = UI.stageChapterOpen[c] ?? isFrontierChapter;
+        let tiles = "";
+        if (open) for (let i = start; i <= end; i++) tiles += tileHtml(i);
+        chapters.push(`
+          <div class="stage-chapter">
+            <button class="rank-head stage-chapter-head ${isFrontierChapter ? "frontier" : ""}" onclick="UI.toggleStageChapter(${c})">
+              <span class="rh-name">${isFrontierChapter ? "🚩 " : allCleared ? "✓ " : ""}Stage ${start.toLocaleString("de-DE")}–${end.toLocaleString("de-DE")}</span>
+              <span class="rh-info">${clearedCount}/${end - start + 1} ✓</span>
+              <span class="rh-arrow">${open ? "▲" : "▼"}</span>
+            </button>
+            ${open ? `<div class="stage-tiles rank-body">${tiles}</div>` : ""}
+          </div>`);
+      }
+      chaptersHtml = chapters.join("");
     }
 
     return `
       <div class="panel">
         <div class="mode-bar"><button class="btn ghost sm" onclick="Game.backToTeam()">← Team</button></div>
         <h2>🏟️ Stage wählen</h2>
-        <button class="btn frontier-btn" onclick="Game.startStageRun(${frontier})">🚩 Höchste Stage spielen — Stage ${frontier}</button>
+        <button class="btn frontier-btn" onclick="Game.startStageRun(${frontier})">🚩 Höchste Stage spielen — Stage ${frontier.toLocaleString("de-DE")}</button>
         <p class="hint" style="text-align:left;padding:6px 0 8px">Die höchste Stage (🚩) startet nach einer Niederlage automatisch bei Welle 1 neu — dein Team kämpft endlos weiter. Nach einem Sieg geht es direkt zur nächsten Stage. Geschaffte Stages (✓) kannst du einzeln wiederholen.</p>
-        <div class="stage-tiles">${tiles}</div>
+        ${frontier > size ? `
+          <div class="stage-jump-row">
+            <input type="number" id="stage-jump-input" class="stage-jump-input" placeholder="Stage-Nr. springen…" min="1" max="${frontier}">
+            <button class="btn sm" onclick="UI.jumpToStage()">Springen</button>
+          </div>` : ""}
+        <div class="stage-chapters">${chaptersHtml}</div>
       </div>`;
   },
 
@@ -1365,9 +1422,24 @@ const UI = {
     Game.fuseGroup(key, val === "max" ? "max" : parseInt(val, 10));
   },
 
+  updateFuseCost(idx) {
+    const meta = UI._fuseMeta && UI._fuseMeta[idx];
+    if (!meta) return;
+    const sel = document.getElementById("fuseamt-" + idx);
+    if (!sel) return;
+    const n = sel.value === "max" ? meta.maxPairs : Math.min(parseInt(sel.value, 10) || 1, meta.maxPairs);
+    const total = meta.costPer * n;
+    const afford = Game.state.gold >= total;
+    const costEl = document.getElementById("fusecost-" + idx);
+    if (costEl) costEl.innerHTML = `→ ${meta.resultName} <span class="fuse-cost-val">${total.toLocaleString("de-DE")} 💰</span>`;
+    const btn = document.getElementById("fusebtn-" + idx);
+    if (btn) btn.disabled = !afford;
+  },
+
   renderFusion() {
     const groups = Game.collectionGroups();
     UI._fuseKeys = [];
+    UI._fuseMeta = [];
     let idx = 0;
     // nach Rang gruppieren
     const byRank = {};
@@ -1393,6 +1465,7 @@ const UI = {
         const canAffordOne = Game.state.gold >= fuseCostPer;
         const i = idx++;
         UI._fuseKeys[i] = g.key;
+        UI._fuseMeta[i] = { costPer: fuseCostPer, resultName: DATA.rarities[resultRarity].name, maxPairs };
         return `
           <div class="mon ${m.fused ? "fused" : ""} ${UI.glowClass(m.rarity)}" style="--rcolor:${UI.rarColor(m.rarity)}">
             <div class="count-badge">×${g.count}</div>
@@ -1409,10 +1482,10 @@ const UI = {
             </div>
             ${canFuse ? `
               <div class="fuse-row">
-                <select id="fuseamt-${i}" class="fuse-sel">${options}</select>
-                <button class="btn sm good" onclick="UI.doFuse(${i})" ${canAffordOne ? "" : "disabled"}>⚛ Fusionieren</button>
+                <select id="fuseamt-${i}" class="fuse-sel" onchange="UI.updateFuseCost(${i})">${options}</select>
+                <button class="btn good fuse-btn" id="fusebtn-${i}" onclick="UI.doFuse(${i})" ${canAffordOne ? "" : "disabled"} title="Fusionieren">⚛</button>
               </div>
-              <div class="mmeta">→ ${DATA.rarities[resultRarity].name} · <span style="color:var(--gold)">${fuseCostPer.toLocaleString("de-DE")} 💰</span></div>`
+              <div class="fuse-cost" id="fusecost-${i}">→ ${DATA.rarities[resultRarity].name} <span class="fuse-cost-val">${fuseCostPer.toLocaleString("de-DE")} 💰</span></div>`
               : `<div class="mmeta" style="margin-top:8px">${avail < 1 ? "Auf Expedition — keine Fusion möglich" : "Nur 1× frei — keine Fusion möglich"}</div>`}
           </div>`;
       }).join("");
@@ -1429,13 +1502,13 @@ const UI = {
               const totalPairs = list.reduce((s,g)=>s+Math.floor(Game.availableCount(g.sample)/2),0);
               const totalCost  = Game.fuseCost(DATA.nextRarity(rarity)) * totalPairs;
               const canAfford  = Game.state.gold >= totalCost;
-              return `<button class="btn sm good rank-fuse-all${canAfford ? "" : " fuse-all-broke"}" onclick="Game.fuseAllInRank('${rarity}')" ${canAfford ? "" : 'disabled'}>
+              return `<button class="btn sm good rank-fuse-all${canAfford ? "" : " fuse-all-broke"}" onclick="Game.fuseAllInRank('${rarity}')" ${canAfford ? "" : 'disabled'} title="⚛ Alle (${totalPairs}×) — ${totalCost.toLocaleString("de-DE")} 💰">
                 <span class="rfa-label">⚛ Alle (${totalPairs}×)</span>
                 <span class="rfa-cost">${totalCost.toLocaleString("de-DE")} 💰</span>
               </button>`;
-            })() : ""}
+            })() : `<div class="rank-fuse-all-placeholder"></div>`}
           </div>
-          ${open ? `<div class="coll-grid rank-body">${cards}</div>` : ""}
+          ${open ? `<div class="coll-grid rank-body fusion-grid">${cards}</div>` : ""}
         </div>`;
     }).join("");
 
