@@ -1668,12 +1668,23 @@ const UI = {
     }
   },
 
-  /* ---- Fusions-Ergebnis: Monster fliegen von links/rechts zusammen, Glow, dann Auflistung ---- */
-  showFusionResult(srcEmoji, srcColor, results, totalCost) {
+  /* ---- Fusions-Ergebnis: Monster fliegen von links/rechts zusammen, Glow, dann Auflistung ----
+     srcEmojis: String (eine Art) oder Array (alle Arten bei "Alle fusionieren") —
+     mehrere werden kreisförmig angeordnet (2=Paar, 3=Dreieck, 4=Raute, 5=Stern, …) */
+  showFusionResult(srcEmojis, srcColor, results, totalCost) {
     if (!results || !results.length) return;
     const total = results.reduce((s, r) => s + r.count, 0);
     const main = results[0];
     const rc = UI.rarColor(main.rarity);
+    const emojis = Array.isArray(srcEmojis) ? srcEmojis : [srcEmojis];
+    const n = emojis.length;
+    const size = n === 1 ? 54 : n <= 3 ? 40 : n <= 5 ? 34 : n <= 8 ? 28 : 24;
+    const radius = n === 1 ? 0 : n === 2 ? 16 : n <= 4 ? 26 : n <= 6 ? 32 : 38;
+    const groupHtml = emojis.map((em, i) => {
+      const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n; // Start oben, im Uhrzeigersinn
+      const x = Math.round(Math.cos(ang) * radius), y = Math.round(Math.sin(ang) * radius);
+      return `<span class="fz-gm" style="left:${x}px;top:${y}px;font-size:${size}px">${em}</span>`;
+    }).join("");
     const rows = results.length > 1 ? results.map(r => {
       const c = UI.rarColor(r.rarity);
       return `<div class="erl-row">
@@ -1688,9 +1699,9 @@ const UI = {
     UI.modal(`
       <div class="fusion-reveal">
         <div class="fz-stage" id="fz-stage">
-          <span class="fz-mon fz-left" style="--rcolor:${srcColor}">${srcEmoji}</span>
+          <span class="fz-mon fz-left" style="--rcolor:${srcColor}">${groupHtml}</span>
           <span class="fz-burst" style="--rcolor:${rc}"></span>
-          <span class="fz-mon fz-right" style="--rcolor:${srcColor}">${srcEmoji}</span>
+          <span class="fz-mon fz-right" style="--rcolor:${srcColor}">${groupHtml}</span>
         </div>
         <div class="fz-result ep-hidden" id="fz-result">
           <div class="reveal-mon-emoji ${UI.glowClass(main.rarity)}" style="color:${rc}">${main.emoji}</div>

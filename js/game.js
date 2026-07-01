@@ -532,7 +532,7 @@ const Game = {
 
     let totalMade = 0;
     const results = [];
-    const srcEmoji = entries[0].emoji, srcColor = DATA.rarities[rarity].color;
+    const srcEmojis = entries.map(e => e.emoji), srcColor = DATA.rarities[rarity].color;
     for (const entry of [...entries]) {
       const pairs = Math.floor(Game.availableCount(entry) / 2);
       if (pairs < 1) continue;
@@ -541,7 +541,7 @@ const Game = {
       totalMade += pairs;
     }
     if (!totalMade) { Events.emit("toast","Keine fusionierbaren Paare.", "bad"); return; }
-    UI.showFusionResult(srcEmoji, srcColor, results, totalCost);
+    UI.showFusionResult(srcEmojis, srcColor, results, totalCost);
     Events.emit("render");
   },
 
