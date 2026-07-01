@@ -43,7 +43,8 @@ const Battle = {
      dass hochrangige Monster komplett immun gegen Gegner-Schaden werden. */
   calculateDamage(attacker, defender, fixed = false) {
     if (fixed) return { dmg: attacker.attack, advantage: false };
-    const variance = 0.85 + Math.random() * 0.30;
+    const bt = DATA.battleTuning;
+    const variance = bt.varianceMin + Math.random() * bt.varianceRange;
     let mod = 1;
     const atkEl = DATA.elements[attacker.element];
     if (atkEl && atkEl.strong === defender.element) mod = 1.20;
@@ -51,7 +52,7 @@ const Battle = {
              DATA.elements[defender.element].strong === attacker.element) mod = 0.85;
     const def = defender.defense || 0;
     const atk = attacker.attack;
-    const defReduction = Math.min(0.75, def / (def + atk * 1.5));
+    const defReduction = Math.min(0.75, def / (def + atk * bt.defenseConstant));
     const raw = Math.round(atk * mod * variance * (1 - defReduction));
     return { dmg: Math.max(1, raw), advantage: mod > 1 };
   },
@@ -82,11 +83,12 @@ const Battle = {
     const element = els[Math.floor(Math.random() * els.length)];
 
     // Logarithmische Kurve: schnelles frühes Wachstum, das sich bei hohen Leveln abflacht
+    const bt = DATA.battleTuning;
     const logLv = Math.log(lv + 1);
-    let hp     = Math.round(DATA.enemyBase.hp     * lv * (0.8 + 0.8 * logLv));
-    let attack = Math.round(DATA.enemyBase.attack * Math.sqrt(lv) * (1.0 + 0.7 * logLv));
-    let reward = Math.round(DATA.enemyBase.reward * Math.pow(lv, 1.1));
-    if (isBoss) { hp = Math.round(hp * 2.5); attack = Math.round(attack * 1.2); reward = Math.round(reward * 3.0); }
+    let hp     = Math.round(DATA.enemyBase.hp     * lv * (bt.enemyHpBase + bt.enemyHpLogMult * logLv));
+    let attack = Math.round(DATA.enemyBase.attack * Math.pow(lv, bt.enemyAtkExp) * (1.0 + bt.enemyAtkLogMult * logLv));
+    let reward = Math.round(DATA.enemyBase.reward * Math.pow(lv, bt.rewardExp));
+    if (isBoss) { hp = Math.round(hp * bt.bossHpMult); attack = Math.round(attack * bt.bossAtkMult); reward = Math.round(reward * bt.bossRewardMult); }
 
     s.enemy = {
       name: (isBoss ? "👑 " : "") + tpl.name, emoji: tpl.emoji, element,
@@ -112,15 +114,15 @@ const Battle = {
 
       if (Battle.frontier && wasFrontier) {
         // Höchste Stage geschafft → automatisch weiter bis zum Tod
-        UI.toast(`🏆 Stage ${cleared} geschafft! Weiter zu Stage ${cleared + 1}`, "good");
+        Events.emit("toast", `🏆 Stage ${cleared} geschafft! Weiter zu Stage ${cleared + 1}`, "good");
         Battle.startStage(cleared + 1); // current = cleared+1 = neue höchste → bleibt Frontier
       } else {
         // Bereits freigeschaltete Stage geschafft → zurück zur Stage-Auswahl
-        UI.toast(`🏆 Stage ${cleared} geschafft!`, "good");
+        Events.emit("toast", `🏆 Stage ${cleared} geschafft!`, "good");
         Battle.mode = null;
         UI.kampfView = "stageSelect";
       }
-      if (UI.current === "home") UI.render();
+      if (UI.current === "home") Events.emit("render");
     } else {
       st.wave++;
       Battle.spawnEnemy(); // HP wird mitgenommen (kein Heilen)
@@ -200,7 +202,7 @@ const Battle = {
     s.enemy = null;
     UI.kampfView = "modes";
     UI.showWorldBossReward(lv, { gold, eggs, crystals });
-    if (UI.current === "home") UI.render();
+    if (UI.current === "home") Events.emit("render");
   },
 
   /* nächstes lebendes Team-Monster (für Animation/Reihenfolge) */
@@ -236,7 +238,7 @@ const Battle = {
         const dmg = Math.max(1, Math.round(perMon * variance));
         s.enemy.hp -= dmg;
         Battle.fx = { type: "monster", attackerId: m.id, dmg };
-        UI.refresh();
+        Events.emit("refresh");
         if (s.enemy.hp <= 0) { state.killed = true; Battle.onWorldBossDefeated(); }
       });
       t += STEP;
@@ -250,7 +252,7 @@ const Battle = {
       const dmg = Math.max(floor, Math.round(s.enemy.attack * variance - Game.totalDefense() * 0.1));
       Battle.wbHp = Math.max(0, Battle.wbHp - dmg);
       Battle.fx = { type: "enemy", targetId: "wbpool", dmg };
-      UI.refresh();
+      Events.emit("refresh");
       if (Battle.wbHp <= 0) Battle.wbLost();
     });
 
@@ -260,9 +262,9 @@ const Battle = {
   },
 
   wbLost() {
-    UI.toast("💀 WorldBoss-Team gefallen – Neustart", "bad");
+    Events.emit("toast", "💀 WorldBoss-Team gefallen – Neustart", "bad");
     Battle.startWorldBoss(Game.state.worldBoss.level);
-    if (UI.current === "home") UI.render();
+    if (UI.current === "home") Events.emit("render");
   },
 
   /* Ablauf: Monster1 → Gegner → Monster2 → Gegner … (abwechselnd, ein Schlag pro Tick).
@@ -279,14 +281,14 @@ const Battle = {
     if (alive.length === 0) {
       if (Battle.frontier) {
         // Höchste Stage: leise neu starten ab Welle 1
-        UI.toast(`💀 Niederlage — Welle 1 neu gestartet`, "bad");
+        Events.emit("toast", `💀 Niederlage — Welle 1 neu gestartet`, "bad");
         Battle.startStage(s.stage.current);
-        if (UI.current === "home") UI.render();
+        if (UI.current === "home") Events.emit("render");
       } else {
-        UI.toast(`💀 Stage ${s.stage.current} verloren`, "bad");
+        Events.emit("toast", `💀 Stage ${s.stage.current} verloren`, "bad");
         Battle.mode = null;
         UI.kampfView = "stageSelect";
-        if (UI.current === "home") UI.render();
+        if (UI.current === "home") Events.emit("render");
       }
       return;
     }
@@ -295,7 +297,7 @@ const Battle = {
 
     if (Battle.phase === "team") {
       const attacker = Battle.nextAttacker(team);
-      if (!attacker) { UI.refresh(); return; }
+      if (!attacker) { Events.emit("refresh"); return; }
       const dmg = Battle.calculateDamage(attacker, s.enemy, true).dmg;
       s.enemy.hp -= dmg;
       Battle.lastAttackerId = attacker.id;
@@ -306,16 +308,14 @@ const Battle = {
     } else {
       let target = team.find(m => m.id === Battle.lastAttackerId && m.hp > 0);
       if (!target) target = alive[Math.floor(Math.random() * alive.length)];
-      // ATK skaliert auf das Ziel: Basis = 12 % des Ziel-MaxHP, damit jedes Monster
-      // unabhängig vom Rang ~8–12 Treffer aushält. Dann greift Varianz + Element + Defense normal.
-      const scaledAtk = Math.round(target.maxHp * 0.12);
-      const scaledEnemy = { ...s.enemy, attack: Math.max(s.enemy.attack, scaledAtk) };
-      const { dmg } = Battle.calculateDamage(scaledEnemy, target);
+      // Echter, stage-skalierter Gegner-Angriff läuft durch die normale Verteidigungsformel —
+      // Fusion/Verteidigung muss real vor Schaden schützen, statt neutralisiert zu werden.
+      const { dmg } = Battle.calculateDamage(s.enemy, target);
       target.hp = Math.max(0, target.hp - dmg);
       Battle.fx = { type: "enemy", targetId: target.id, dmg };
       Battle.phase = "team";
     }
-    UI.refresh();
+    Events.emit("refresh");
   },
 
   giveReward() {
@@ -334,32 +334,7 @@ const Battle = {
 
     // Schwebende Gold/XP-Indikatoren über dem Gegner
     const enemyEl = document.getElementById("enemy-fighter");
-    UI.floatGain(enemyEl, "+" + e.reward.toLocaleString("de-DE") + " 💰", "dmg-gold", 42);
-    UI.floatGain(enemyEl, "+" + xp + " XP", "dmg-xp", 76);
-
-    // Drops
-    Battle.rollDrops(e);
-  },
-
-  rollDrops(e) {
-    const s = Game.state;
-    const r = Math.random();
-    const playerLevel = s.playerLevel || 1;
-    // 10% Ei (Typ abhängig vom Spieler-Level), 0.5% Kristall
-    if (r < 0.10) {
-      // Ei-Typ nach Spieler-Level bestimmen (gewichtet)
-      const eligible = DATA.eggTypes.filter(et => et.dropMinLevel != null && playerLevel >= et.dropMinLevel);
-      if (eligible.length > 0) {
-        const totalWeight = eligible.reduce((sum, et) => sum + (et.dropWeight || 1), 0);
-        let pick = Math.random() * totalWeight;
-        let chosen = eligible[0];
-        for (const et of eligible) { pick -= (et.dropWeight || 1); if (pick <= 0) { chosen = et; break; } }
-        s.inventory.eggs[chosen.id] = (s.inventory.eggs[chosen.id] || 0) + 1;
-        UI.toast(`${chosen.emoji} ${chosen.name} gefunden!`, "good");
-      }
-    } else if (r < 0.105) {
-      s.inventory.crystals += 1 + Math.floor(e.level / 20);
-      UI.toast("💎 Kristall gefunden!", "good");
-    }
+    Events.emit("floatGain", enemyEl, "+" + e.reward.toLocaleString("de-DE") + " 💰", "dmg-gold", 42);
+    Events.emit("floatGain", enemyEl, "+" + xp + " XP", "dmg-xp", 76);
   },
 };

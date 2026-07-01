@@ -92,15 +92,15 @@ DATA.eggTypes = [
     id: "standard", name: "Standard-Ei", emoji: "🥚", currency: "gold", cost: 150, minLevel: 1,
     dropMinLevel: 1, dropWeight: 10,
     table: [
-      { rarity: "normal", chance: 0.70 }, { rarity: "selten", chance: 0.28 }, { rarity: "episch", chance: 0.02 },
+      { rarity: "normal", chance: 0.70 }, { rarity: "selten", chance: 0.30 },
     ],
   },
   {
     id: "premium", name: "Premium-Ei", emoji: "✨", currency: "gold", cost: 1500, minLevel: 5,
     dropMinLevel: 5, dropWeight: 6,
     table: [
-      { rarity: "selten", chance: 0.60 }, { rarity: "episch", chance: 0.30 },
-      { rarity: "legendaer", chance: 0.09 }, { rarity: "mythisch", chance: 0.01 },
+      { rarity: "selten", chance: 0.60 }, { rarity: "episch", chance: 0.29 },
+      { rarity: "legendaer", chance: 0.01 },
     ],
   },
   {
@@ -209,6 +209,24 @@ DATA.enemyTiers = [
 
 /* Gegner-Basiswerte (Level-1-Goblin = HP50 / Atk5 / Reward20 lt. Spec) */
 DATA.enemyBase = { hp: 80, attack: 4, reward: 5 };
+
+/* Kampf-Feintuning: alle Formel-Konstanten aus battle.js an einem Ort.
+   enemyAtkExp/enemyAtkLogMult bestimmen, wie steil der Gegner-Angriff mit dem Level wächst —
+   das ist der zentrale Hebel, um Stage-Fortschritt an die Monster-Rarität zu koppeln. */
+DATA.battleTuning = {
+  varianceMin: 0.85, varianceRange: 0.30,   // Schadens-Varianz: 0.85–1.15×
+  defenseConstant: 0.6,                     // defReduction = def / (def + atk * K) — je kleiner, desto länger bleibt Verteidigung relevant
+  enemyHpBase: 0.8, enemyHpLogMult: 0.8,    // hp = base * lv * (enemyHpBase + enemyHpLogMult * ln(lv+1))
+  enemyAtkExp: 0.75, enemyAtkLogMult: 0.5,  // attack = base * lv^enemyAtkExp * (1 + enemyAtkLogMult * ln(lv+1))
+  rewardExp: 1.1,                           // reward = base * lv^rewardExp
+  bossHpMult: 2.5, bossAtkMult: 1.2, bossRewardMult: 3.0,
+};
+
+/* Spieler-/Expeditions-XP-Kurven (Level^Exponent * Basis) */
+DATA.progression = {
+  playerXpBase: 100, playerXpExp: 1.5,
+  expeditionXpBase: 150, expeditionXpExp: 1.6,
+};
 
 /* Offline-Cap in Sekunden (8 Stunden) */
 DATA.offlineCapSeconds = 8 * 3600;

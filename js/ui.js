@@ -13,6 +13,8 @@ const UI = {
   expPickSlot: null,   // welcher Slot gerade im Auswahl-Modal befüllt wird
   stageChapterOpen: {}, // welche Stage-Kapitel in der Stage-Auswahl aufgeklappt sind
   STAGE_CHAPTER_SIZE: 50,
+  // Auswahlwerte für "Anzahl Fusionen" — feste Schrittfolge statt 1..maxPairs (siehe renderFusion)
+  FUSE_AMOUNT_STEPS: [1, 2, 3, 4, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000],
 
   init() {
     document.querySelectorAll("#tabbar .tab").forEach(btn => {
@@ -22,6 +24,11 @@ const UI = {
     document.getElementById("modal").addEventListener("click", (e) => {
       if (e.target.id === "modal" && UI._modalClosable) UI.closeModal();
     });
+    // Game/Battle rufen UI nicht mehr direkt auf, sondern nur über Events
+    Events.on("toast", UI.toast);
+    Events.on("refresh", UI.refresh);
+    Events.on("render", UI.render);
+    Events.on("floatGain", UI.floatGain);
     UI.switchTab("dashboard");
   },
 
@@ -371,24 +378,28 @@ const UI = {
     }, 100);
   },
 
-  _mineCd(mineId) {
-    const cfg = Game.MINES.find(m => m.id === mineId);
-    const mine = Game.state.mines?.[mineId];
-    if (!cfg || !mine?.owned) return { ready: false, itemsReady: 0, pct: 0, text: "—" };
-    const elapsed = Date.now() - (mine.lastCollect || 0);
-    const total = cfg.cooldown;
-    const itemsReady = Math.floor(elapsed / total);
-    const ready = itemsReady > 0;
-    const cycleElapsed = elapsed % total;
-    const pct = (cycleElapsed / total) * 100;
-    const remaining = total - cycleElapsed;
+  /* Gemeinsame Cooldown-Berechnung (Minen + Expeditionen): Fortschritt + h:mm:ss/mm:ss-Text
+     für den aktuell laufenden Zyklus seit startTime. */
+  cooldownState(startTime, durationMs) {
+    const elapsed = Date.now() - startTime;
+    const cycleElapsed = elapsed % durationMs;
+    const remaining = durationMs - cycleElapsed;
     const h = Math.floor(remaining / 3600000);
     const mm = Math.floor((remaining % 3600000) / 60000);
     const sec = Math.floor((remaining % 60000) / 1000);
     const text = h > 0
       ? `${h}:${String(mm).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
       : `${mm}:${String(sec).padStart(2,"0")}`;
-    return { ready, itemsReady, pct, text };
+    return { elapsed, remaining, pct: (cycleElapsed / durationMs) * 100, text };
+  },
+
+  _mineCd(mineId) {
+    const cfg = Game.MINES.find(m => m.id === mineId);
+    const mine = Game.state.mines?.[mineId];
+    if (!cfg || !mine?.owned) return { ready: false, itemsReady: 0, pct: 0, text: "—" };
+    const cd = UI.cooldownState(mine.lastCollect || 0, cfg.cooldown);
+    const itemsReady = Math.floor(cd.elapsed / cfg.cooldown);
+    return { ready: itemsReady > 0, itemsReady, pct: cd.pct, text: cd.text };
   },
 
   renderMine() {
@@ -448,18 +459,9 @@ const UI = {
   _expCd(slotIdx) {
     const slot = Game.state.expedition.slots[slotIdx];
     if (!slot) return { ready: false, pct: 0, text: "—" };
-    const elapsed = Date.now() - slot.startTime;
-    const total   = slot.durationMs;
-    const ready   = elapsed >= total;
-    if (ready) return { ready: true, pct: 100, text: "Bereit!" };
-    const remaining = total - elapsed;
-    const h   = Math.floor(remaining / 3600000);
-    const mm  = Math.floor((remaining % 3600000) / 60000);
-    const sec = Math.floor((remaining % 60000) / 1000);
-    const text = h > 0
-      ? `${h}:${String(mm).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
-      : `${mm}:${String(sec).padStart(2,"0")}`;
-    return { ready: false, pct: Math.min(99, (elapsed / total) * 100), text };
+    const cd = UI.cooldownState(slot.startTime, slot.durationMs);
+    if (cd.elapsed >= slot.durationMs) return { ready: true, pct: 100, text: "Bereit!" };
+    return { ready: false, pct: Math.min(99, cd.pct), text: cd.text };
   },
 
   _startExpeditionTimer() {
@@ -1251,17 +1253,21 @@ const UI = {
     return subbar + content;
   },
 
-  /* Rang-Akkordeon-Sektion (gemeinsam für Sammlung & Dex) */
-  rankSection(rarity, innerHtml, count, open, toggleAttr) {
+  /* Rang-Akkordeon-Sektion (gemeinsam für Sammlung, Dex & Fusion).
+     extraHeaderHtml: optionales zusätzliches Element neben dem Header (z.B. "Alle fusionieren"-Button). */
+  rankSection(rarity, innerHtml, count, open, toggleAttr, extraHeaderHtml = "", extraBodyClass = "") {
     const rc = UI.rarColor(rarity);
     return `
       <div class="rank-section">
-        <button class="rank-head" style="--rcolor:${rc}" ${toggleAttr}>
-          <span class="rh-name" style="color:${rc}">${DATA.rarities[rarity].name}</span>
-          <span class="rh-info">${count}</span>
-          <span class="rh-arrow">${open ? "▲" : "▼"}</span>
-        </button>
-        ${open ? `<div class="coll-grid rank-body">${innerHtml}</div>` : ""}
+        <div class="rank-head-row">
+          <button class="rank-head" style="--rcolor:${rc}" ${toggleAttr}>
+            <span class="rh-name" style="color:${rc}">${DATA.rarities[rarity].name}</span>
+            <span class="rh-info">${count}</span>
+            <span class="rh-arrow">${open ? "▲" : "▼"}</span>
+          </button>
+          ${extraHeaderHtml}
+        </div>
+        ${open ? `<div class="coll-grid rank-body ${extraBodyClass}">${innerHtml}</div>` : ""}
       </div>`;
   },
 
@@ -1447,7 +1453,6 @@ const UI = {
 
     const sections = DATA.rarityOrder.filter(r => byRank[r]).map(rarity => {
       const list = byRank[rarity];
-      const rc = UI.rarColor(rarity);
       const open = !!UI.fusionOpen[rarity];
       const fuseableCount = list.filter(g => Game.availableCount(g.sample) >= 2).length;
 
@@ -1457,9 +1462,15 @@ const UI = {
         const avail = Game.availableCount(g.sample);
         const maxPairs = Math.floor(avail / 2);
         const canFuse = maxPairs >= 1;
+        // Feste Schrittwerte statt jeder einzelnen Zahl — bei sehr hohen Stückzahlen (100.000+)
+        // würde eine Option pro Zahl das <select> auf hunderttausende Einträge aufblähen und das
+        // Aufklappen spürbar verlangsamen.
         let options = "";
-        for (let p = 1; p <= maxPairs; p++) options += `<option value="${p}">${p}×</option>`;
-        if (maxPairs > 1) options += `<option value="max">Max (${maxPairs}×)</option>`;
+        for (const p of UI.FUSE_AMOUNT_STEPS) {
+          if (p >= maxPairs) break;
+          options += `<option value="${p}">${p.toLocaleString("de-DE")}×</option>`;
+        }
+        if (maxPairs > 1) options += `<option value="max">Max (${maxPairs.toLocaleString("de-DE")}×)</option>`;
         const resultRarity = DATA.nextRarity(m.rarity);
         const fuseCostPer = Game.fuseCost(resultRarity);
         const canAffordOne = Game.state.gold >= fuseCostPer;
@@ -1490,26 +1501,18 @@ const UI = {
           </div>`;
       }).join("");
 
-      return `
-        <div class="rank-section">
-          <div class="rank-head-row">
-            <button class="rank-head" style="--rcolor:${rc}" onclick="UI.toggleFusionRank('${rarity}')">
-              <span class="rh-name" style="color:${rc}">${DATA.rarities[rarity].name}</span>
-              <span class="rh-info">${list.length} Arten${fuseableCount ? ` · ${fuseableCount} fusionierbar` : ""}</span>
-              <span class="rh-arrow">${open ? "▲" : "▼"}</span>
-            </button>
-            ${fuseableCount ? (() => {
-              const totalPairs = list.reduce((s,g)=>s+Math.floor(Game.availableCount(g.sample)/2),0);
-              const totalCost  = Game.fuseCost(DATA.nextRarity(rarity)) * totalPairs;
-              const canAfford  = Game.state.gold >= totalCost;
-              return `<button class="btn sm good rank-fuse-all${canAfford ? "" : " fuse-all-broke"}" onclick="Game.fuseAllInRank('${rarity}')" ${canAfford ? "" : 'disabled'} title="⚛ Alle (${totalPairs}×) — ${totalCost.toLocaleString("de-DE")} 💰">
+      const fuseAllHtml = fuseableCount ? (() => {
+        const totalPairs = list.reduce((s,g)=>s+Math.floor(Game.availableCount(g.sample)/2),0);
+        const totalCost  = Game.fuseCost(DATA.nextRarity(rarity)) * totalPairs;
+        const canAfford  = Game.state.gold >= totalCost;
+        return `<button class="btn sm good rank-fuse-all${canAfford ? "" : " fuse-all-broke"}" onclick="Game.fuseAllInRank('${rarity}')" ${canAfford ? "" : 'disabled'} title="⚛ Alle (${totalPairs}×) — ${totalCost.toLocaleString("de-DE")} 💰">
                 <span class="rfa-label">⚛ Alle (${totalPairs}×)</span>
                 <span class="rfa-cost">${totalCost.toLocaleString("de-DE")} 💰</span>
               </button>`;
-            })() : `<div class="rank-fuse-all-placeholder"></div>`}
-          </div>
-          ${open ? `<div class="coll-grid rank-body fusion-grid">${cards}</div>` : ""}
-        </div>`;
+      })() : `<div class="rank-fuse-all-placeholder"></div>`;
+      const countText = `${list.length} Arten${fuseableCount ? ` · ${fuseableCount} fusionierbar` : ""}`;
+
+      return UI.rankSection(rarity, cards, countText, open, `onclick="UI.toggleFusionRank('${rarity}')"`, fuseAllHtml, "fusion-grid");
     }).join("");
 
     return `

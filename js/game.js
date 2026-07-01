@@ -186,7 +186,8 @@ const Game = {
 
   /* ---- Spieler-Erfahrung ---- */
   playerExpToNext(level = Game.state.playerLevel) {
-    return Math.round(100 * Math.pow(level, 1.5));
+    const p = DATA.progression;
+    return Math.round(p.playerXpBase * Math.pow(level, p.playerXpExp));
   },
   addPlayerExp(amount) {
     const s = Game.state;
@@ -197,7 +198,7 @@ const Game = {
       s.playerLevel++;
       ups++;
     }
-    if (ups > 0) UI.toast("⭐ Spieler-Level " + s.playerLevel + "!", "good");
+    if (ups > 0) Events.emit("toast","⭐ Spieler-Level " + s.playerLevel + "!", "good");
   },
 
   /* ---- Kampf-Navigation: Modus → (Team-Auswahl) → (Stage-Auswahl) → Kampf ---- */
@@ -212,13 +213,13 @@ const Game = {
       Battle.mode = null;           // noch nicht kämpfen
       UI.kampfView = "team";        // Stage: zuerst Team wählen
     }
-    UI.render();
+    Events.emit("render");
   },
   // 2) Team bestätigt (nur Stage)
   confirmTeam() {
-    if (Game.state.team.length < 1) { UI.toast("Wähle mindestens 1 Monster!", "bad"); return; }
+    if (Game.state.team.length < 1) { Events.emit("toast","Wähle mindestens 1 Monster!", "bad"); return; }
     UI.kampfView = "stageSelect";
-    UI.render();
+    Events.emit("render");
   },
   // 3) Stage aus der Auswahl starten
   startStageRun(n) {
@@ -229,20 +230,20 @@ const Game = {
     Battle.frontier = (n === s.stage.unlocked);
     Battle.startStage(n);
     UI.kampfView = "fight";
-    UI.render();
+    Events.emit("render");
   },
   restartStageRun() {
     Game.startStageRun(Game.state.stage.current);
   },
   restartWorldBoss() {
     Battle.startWorldBoss(Game.state.worldBoss.level);
-    UI.render();
+    Events.emit("render");
   },
 
   // Navigation zurück
-  backToModes() { Battle.mode = null; Battle.wbClearTimers(); UI.kampfView = "modes"; UI.render(); },
-  backToTeam() { Battle.mode = null; UI.kampfView = "team"; UI.render(); },
-  backToStageSelect() { Battle.mode = null; UI.kampfView = "team"; UI.render(); },
+  backToModes() { Battle.mode = null; Battle.wbClearTimers(); UI.kampfView = "modes"; Events.emit("render"); },
+  backToTeam() { Battle.mode = null; UI.kampfView = "team"; Events.emit("render"); },
+  backToStageSelect() { Battle.mode = null; UI.kampfView = "team"; Events.emit("render"); },
 
   findMonster(id) {
     return Game.state.team.find(m => m.id === id);
@@ -353,16 +354,16 @@ const Game = {
     const s = Game.state;
     const egg = DATA.eggTypes.find(e => e.id === eggId);
     if (!egg) return;
-    if (s.playerLevel < egg.minLevel) { UI.toast(`🥚 Erst ab Spieler-Level ${egg.minLevel}!`, "bad"); return; }
+    if (s.playerLevel < egg.minLevel) { Events.emit("toast",`🥚 Erst ab Spieler-Level ${egg.minLevel}!`, "bad"); return; }
     const have = egg.currency === "crystals" ? s.inventory.crystals : s.gold;
     const n = count === "max" ? Math.floor(have / egg.cost) : Math.min(count, Math.floor(have / egg.cost));
-    if (n < 1) { UI.toast(egg.currency === "crystals" ? "Nicht genug Kristalle! 💎" : "Nicht genug Gold! 💰", "bad"); return; }
+    if (n < 1) { Events.emit("toast",egg.currency === "crystals" ? "Nicht genug Kristalle! 💎" : "Nicht genug Gold! 💰", "bad"); return; }
     if (egg.currency === "crystals") s.inventory.crystals -= egg.cost * n;
     else s.gold -= egg.cost * n;
     const results = Game._rollEgg(egg, n);
     if (results) { UI.showSummonResult(results, egg); }
-    else UI.toast(`🥚 ${n.toLocaleString("de-DE")} ${egg.name} geöffnet`, "good");
-    UI.render();
+    else Events.emit("toast",`🥚 ${n.toLocaleString("de-DE")} ${egg.name} geöffnet`, "good");
+    Events.emit("render");
   },
 
   /* Gedropptes Ei aus Inventar öffnen */
@@ -372,12 +373,12 @@ const Game = {
     if (!egg) return;
     const have = s.inventory.eggs[eggId] || 0;
     const n = count === "max" ? have : Math.min(count, have);
-    if (n < 1) { UI.toast("Keine Eier dieser Art!", "bad"); return; }
+    if (n < 1) { Events.emit("toast","Keine Eier dieser Art!", "bad"); return; }
     s.inventory.eggs[eggId] -= n;
     const results = Game._rollEgg(egg, n);
     if (results) { UI.showSummonResult(results, egg); }
-    else UI.toast(`🥚 ${n.toLocaleString("de-DE")} ${egg.name} geöffnet`, "good");
-    UI.render();
+    else Events.emit("toast",`🥚 ${n.toLocaleString("de-DE")} ${egg.name} geöffnet`, "good");
+    Events.emit("render");
   },
 
   /* Rückwärtskompatibilität für alten hatchEgg()-Aufruf */
@@ -395,29 +396,29 @@ const Game = {
     const s = Game.state;
     const idx = s.team.findIndex(m => m.id === id);
     if (idx >= 0) {
-      if (s.team.length === 1) { UI.toast("Mindestens 1 Monster im Team!", "bad"); return; }
+      if (s.team.length === 1) { Events.emit("toast","Mindestens 1 Monster im Team!", "bad"); return; }
       s.team.splice(idx, 1);
     } else {
-      if (s.team.length >= Game.MAX_TEAM) { UI.toast(`Team voll (max ${Game.MAX_TEAM})!`, "bad"); return; }
+      if (s.team.length >= Game.MAX_TEAM) { Events.emit("toast",`Team voll (max ${Game.MAX_TEAM})!`, "bad"); return; }
       const m = Game.findMonster(id);
       if (m) { Monster.heal(m); s.team.push(m); }
     }
-    UI.render();
+    Events.emit("render");
   },
 
   /* Aus einer Gruppe ein Monster ins Team holen (neues Team-Objekt mit id+hp) */
   teamAddFromGroup(key) {
     const s = Game.state;
-    if (s.team.length >= Game.MAX_TEAM) { UI.toast(`Team voll (max ${Game.MAX_TEAM})!`, "bad"); return; }
+    if (s.team.length >= Game.MAX_TEAM) { Events.emit("toast",`Team voll (max ${Game.MAX_TEAM})!`, "bad"); return; }
     const entry = s.collection.find(e => Game.groupKey(e) === key);
     if (!entry) return;
     if (Game.freeCount(entry) <= 0) {
       const onExpedition = Game.reservedCount(key) > 0;
-      UI.toast(onExpedition ? "Dieses Monster ist auf Expedition!" : "Alle Monster dieser Art bereits im Team!", "bad");
+      Events.emit("toast",onExpedition ? "Dieses Monster ist auf Expedition!" : "Alle Monster dieser Art bereits im Team!", "bad");
       return;
     }
     s.team.push({ ...entry, id: DATA.uid(), hp: entry.maxHp, exp: 0, expToNext: 100, skills: [] });
-    UI.render();
+    Events.emit("render");
   },
 
   /* Ein eingesetztes Monster aus dem Team nehmen */
@@ -425,26 +426,26 @@ const Game = {
     const s = Game.state;
     const idx = s.team.findIndex(t => Game.groupKey(t) === key);
     if (idx < 0) return;
-    if (s.team.length === 1) { UI.toast("Mindestens 1 Monster im Team!", "bad"); return; }
+    if (s.team.length === 1) { Events.emit("toast","Mindestens 1 Monster im Team!", "bad"); return; }
     s.team.splice(idx, 1);
-    UI.render();
+    Events.emit("render");
   },
 
   /* Team-Auswahl-Box: einzelnes Monster entfernen / Team leeren */
   teamRemoveById(id) {
     const s = Game.state;
     s.team = s.team.filter(m => m.id !== id);
-    UI.render();
+    Events.emit("render");
   },
   clearTeam() {
     Game.state.team = [];
-    UI.render();
+    Events.emit("render");
   },
   autoFillTeam(stat) {
     const s = Game.state;
     const sorted = [...s.collection].sort((a, b) => stat === "atk" ? b.attack - a.attack : b.defense - a.defense);
     s.team = sorted.slice(0, Game.MAX_TEAM).map(e => ({ ...e, id: DATA.uid(), hp: e.maxHp, exp: 0, expToNext: 100, skills: [] }));
-    UI.render();
+    Events.emit("render");
   },
 
   /* ---- Sammlung: identische Monster stapeln ---- */
@@ -496,14 +497,14 @@ const Game = {
   fuseAllInRank(rarity) {
     const s = Game.state;
     const entries = s.collection.filter(e => e.rarity === rarity && Game.availableCount(e) >= 2);
-    if (!entries.length) { UI.toast("Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
+    if (!entries.length) { Events.emit("toast","Keine fusionierbaren Paare in diesem Rang.", "bad"); return; }
 
     const resultRarity = DATA.nextRarity(rarity);
     const costPer = Game.fuseCost(resultRarity);
     const totalPairs = entries.reduce((sum, e) => sum + Math.floor(Game.availableCount(e) / 2), 0);
     const totalCost = costPer * totalPairs;
     if (s.gold < totalCost) {
-      UI.toast(`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 für alle Fusionen benötigt.`, "bad");
+      Events.emit("toast",`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 für alle Fusionen benötigt.`, "bad");
       return;
     }
     s.gold -= totalCost;
@@ -515,9 +516,9 @@ const Game = {
       lastFused = Game._applyFusion(entry, pairs);
       totalMade += pairs;
     }
-    if (!totalMade) { UI.toast("Keine fusionierbaren Paare.", "bad"); return; }
-    UI.toast(`⚛ ${totalMade}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
-    UI.render();
+    if (!totalMade) { Events.emit("toast","Keine fusionierbaren Paare.", "bad"); return; }
+    Events.emit("toast",`⚛ ${totalMade}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    Events.emit("render");
   },
 
   /* Fusion einer Gruppe (Anzahl oder "max") */
@@ -525,7 +526,7 @@ const Game = {
     const s = Game.state;
     const entry = s.collection.find(e => Game.groupKey(e) === key);
     const avail = entry ? Game.availableCount(entry) : 0;
-    if (!entry || avail < 2) { UI.toast("Mindestens 2 freie gleiche Monster nötig (Expedition zählt nicht).", "bad"); return; }
+    if (!entry || avail < 2) { Events.emit("toast","Mindestens 2 freie gleiche Monster nötig (Expedition zählt nicht).", "bad"); return; }
 
     const maxPairs = Math.floor(avail / 2);
     const p = pairs === "max" ? maxPairs : Math.min(parseInt(pairs, 10) || 1, maxPairs);
@@ -535,21 +536,21 @@ const Game = {
     const costPer = Game.fuseCost(resultRarity);
     const totalCost = costPer * p;
     if (s.gold < totalCost) {
-      UI.toast(`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 benötigt.`, "bad");
+      Events.emit("toast",`Nicht genug Gold! ${totalCost.toLocaleString("de-DE")} 💰 benötigt.`, "bad");
       return;
     }
     s.gold -= totalCost;
     const fused = Game._applyFusion(entry, p);
-    UI.toast(`⚛ ${p}× Fusion → ${fused.name} (${DATA.rarities[fused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
-    UI.render();
+    Events.emit("toast",`⚛ ${p}× Fusion → ${fused.name} (${DATA.rarities[fused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    Events.emit("render");
   },
 
   /* ---- Minen ---- */
   MINES: [
-    { id: "standard",  name: "Standard-Mine", emoji: "⛏️",  cost: 10_000,      cooldown: 10 * 60 * 1000, reward: { type: "egg",     id: "standard",  label: "Standard-Ei",  emoji: "🥚" }, color: "#9aa4bf" },
-    { id: "elite",     name: "Elite-Mine",     emoji: "🔮",  cost: 100_000,     cooldown: 15 * 60 * 1000, reward: { type: "egg",     id: "elite",     label: "Elite-Ei",     emoji: "🥚" }, color: "#4aa8ff" },
-    { id: "goettlich", name: "Götter-Mine",    emoji: "🌟",  cost: 500_000,     cooldown: 60 * 60 * 1000, reward: { type: "egg",     id: "divine",    label: "Göttlich-Ei",  emoji: "🥚" }, color: "#ffe7a0" },
-    { id: "crystal",   name: "Kristall-Mine",  emoji: "💎",  cost: 1_000_000,   cooldown: 60 * 60 * 1000, reward: { type: "crystal",                  label: "Kristall",     emoji: "💎" }, color: "#00d3a7" },
+    { id: "standard",  name: "Standard-Mine", emoji: "⛏️",  cost: 10_000,        cooldown: 10 * 60 * 1000, reward: { type: "egg",     id: "standard",  label: "Standard-Ei",  emoji: "🥚" }, color: "#9aa4bf" },
+    { id: "elite",     name: "Elite-Mine",     emoji: "🔮",  cost: 1_000_000,     cooldown: 15 * 60 * 1000, reward: { type: "egg",     id: "elite",     label: "Elite-Ei",     emoji: "🥚" }, color: "#4aa8ff" },
+    { id: "crystal",   name: "Kristall-Mine",  emoji: "💎",  cost: 100_000_000,   cooldown: 60 * 60 * 1000, reward: { type: "crystal",                  label: "Kristall",     emoji: "💎" }, color: "#00d3a7" },
+    { id: "goettlich", name: "Götter-Mine",    emoji: "🌟",  cost: 1_000_000_000, cooldown: 60 * 60 * 1000, reward: { type: "egg",     id: "divine",    label: "Göttlich-Ei",  emoji: "🥚" }, color: "#ffe7a0" },
   ],
 
   buyMine(id) {
@@ -557,12 +558,12 @@ const Game = {
     if (!cfg) return;
     const s = Game.state;
     if (s.mines[id]?.owned) return;
-    if (s.gold < cfg.cost) { UI.toast("Nicht genug Gold! 💰", "bad"); return; }
+    if (s.gold < cfg.cost) { Events.emit("toast","Nicht genug Gold! 💰", "bad"); return; }
     s.gold -= cfg.cost;
     s.mines[id] = { owned: true, lastCollect: Date.now() };
-    UI.toast(`${cfg.emoji} ${cfg.name} gekauft!`, "good");
+    Events.emit("toast",`${cfg.emoji} ${cfg.name} gekauft!`, "good");
     UI.updateTopbar();
-    UI.render();
+    Events.emit("render");
   },
 
   mineItemsReady(id) {
@@ -576,7 +577,7 @@ const Game = {
     const cfg = Game.MINES.find(m => m.id === id);
     const s = Game.state;
     const count = Game.mineItemsReady(id);
-    if (count < 1) { UI.toast("Mine noch nicht fertig!", "bad"); return; }
+    if (count < 1) { Events.emit("toast","Mine noch nicht fertig!", "bad"); return; }
     const elapsed = Date.now() - (s.mines[id].lastCollect || 0);
     s.mines[id].lastCollect = Date.now() - (elapsed % cfg.cooldown);
     const r = cfg.reward;
@@ -585,9 +586,9 @@ const Game = {
     } else {
       s.inventory.eggs[r.id] = (s.inventory.eggs[r.id] || 0) + count;
     }
-    UI.toast(`${cfg.emoji} ${count}× ${r.label} ${r.emoji} abgeholt!`, "good");
+    Events.emit("toast",`${cfg.emoji} ${count}× ${r.label} ${r.emoji} abgeholt!`, "good");
     UI.updateTopbar();
-    UI.render();
+    Events.emit("render");
   },
 
   /* ---- Expedition ----
@@ -609,7 +610,10 @@ const Game = {
     return Game.EXPEDITION_SLOT_LEVELS.filter(lv => level >= lv).length;
   },
 
-  expeditionExpToNext(level) { return Math.round(150 * Math.pow(level, 1.6)); },
+  expeditionExpToNext(level) {
+    const p = DATA.progression;
+    return Math.round(p.expeditionXpBase * Math.pow(level, p.expeditionXpExp));
+  },
 
   addExpeditionExp(amount) {
     const e = Game.state.expedition;
@@ -620,7 +624,7 @@ const Game = {
       e.level++;
       ups++;
     }
-    if (ups > 0) UI.toast(`🧭 Expeditions-Level ${e.level}! Neue Slots könnten freigeschaltet sein.`, "good");
+    if (ups > 0) Events.emit("toast",`🧭 Expeditions-Level ${e.level}! Neue Slots könnten freigeschaltet sein.`, "good");
   },
 
   /* Reward skaliert mit Rang (exponentiell) und Laufzeit-Multiplikator */
@@ -638,24 +642,24 @@ const Game = {
     const s = Game.state;
     const exp = s.expedition;
     if (slotIdx >= Game.expeditionSlotsUnlocked(exp.level)) {
-      UI.toast(`Slot benötigt Expeditions-Level ${Game.EXPEDITION_SLOT_LEVELS[slotIdx]}!`, "bad");
+      Events.emit("toast",`Slot benötigt Expeditions-Level ${Game.EXPEDITION_SLOT_LEVELS[slotIdx]}!`, "bad");
       return;
     }
-    if (exp.slots[slotIdx]) { UI.toast("Slot bereits belegt!", "bad"); return; }
+    if (exp.slots[slotIdx]) { Events.emit("toast","Slot bereits belegt!", "bad"); return; }
     const dur = Game.EXPEDITION_DURATIONS.find(d => d.id === durationId);
     if (!dur) return;
-    if (exp.level < dur.minLevel) { UI.toast(`Benötigt Expeditions-Level ${dur.minLevel}!`, "bad"); return; }
+    if (exp.level < dur.minLevel) { Events.emit("toast",`Benötigt Expeditions-Level ${dur.minLevel}!`, "bad"); return; }
     const entry = s.collection.find(e => Game.groupKey(e) === groupKey);
     if (!entry) return;
-    if (Game.freeCount(entry) <= 0) { UI.toast("Kein freies Monster dieser Art (Team/Expedition)!", "bad"); return; }
+    if (Game.freeCount(entry) <= 0) { Events.emit("toast","Kein freies Monster dieser Art (Team/Expedition)!", "bad"); return; }
     exp.slots[slotIdx] = {
       groupKey, templateId: entry.templateId, rarity: entry.rarity, name: entry.name,
       emoji: entry.emoji, element: entry.element,
       durationId, durationMs: dur.ms, durMult: dur.mult, startTime: Date.now(),
     };
-    UI.toast(`🧭 ${entry.name} auf Expedition geschickt (${dur.label})!`, "good");
+    Events.emit("toast",`🧭 ${entry.name} auf Expedition geschickt (${dur.label})!`, "good");
     UI.updateTopbar();
-    UI.render();
+    Events.emit("render");
   },
 
   expeditionCompletedCycles(slotIdx) {
@@ -671,7 +675,7 @@ const Game = {
   expeditionClaim(slotIdx) {
     const s = Game.state;
     const slot = s.expedition.slots[slotIdx];
-    if (!slot || !Game.expeditionReady(slotIdx)) { UI.toast("Expedition noch nicht abgeschlossen!", "bad"); return; }
+    if (!slot || !Game.expeditionReady(slotIdx)) { Events.emit("toast","Expedition noch nicht abgeschlossen!", "bad"); return; }
     const r = Game.expeditionReward(slot.rarity, slot.durMult || 1);
     s.gold += r.gold;
     s.goldEarned = (s.goldEarned || 0) + r.gold;
@@ -682,7 +686,7 @@ const Game = {
     const claimedSlot = { ...slot };
     s.expedition.slots[slotIdx] = null;
     UI.updateTopbar();
-    UI.render();
+    Events.emit("render");
     UI.showExpeditionClaimModal(claimedSlot, r, eggCount);
   },
 
@@ -691,20 +695,20 @@ const Game = {
     const slot = s.expedition.slots[slotIdx];
     if (!slot) return;
     s.expedition.slots[slotIdx] = null;
-    UI.toast(`${slot.name} zurückgerufen — kein Reward.`, "bad");
+    Events.emit("toast",`${slot.name} zurückgerufen — kein Reward.`, "bad");
     UI.updateTopbar();
-    UI.render();
+    Events.emit("render");
   },
 
   /* ---- Settings ---- */
   toggleSetting(key) {
     Game.state.settings[key] = !Game.state.settings[key];
-    UI.render();
+    Events.emit("render");
   },
 
   manualSave() {
-    if (Save.saveGame()) UI.toast("💾 Gespeichert!", "good");
-    else UI.toast("Speichern fehlgeschlagen", "bad");
+    if (Save.saveGame()) Events.emit("toast","💾 Gespeichert!", "good");
+    else Events.emit("toast","Speichern fehlgeschlagen", "bad");
   },
 
   askReset() {
@@ -727,6 +731,6 @@ const Game = {
     Battle.mode = null;
     UI.switchTab("home");
     UI.showTutorial();
-    UI.toast("Neues Spiel gestartet", "good");
+    Events.emit("toast","Neues Spiel gestartet", "good");
   },
 };
