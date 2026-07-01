@@ -51,8 +51,8 @@ const Battle = {
     else if (defender.element && DATA.elements[defender.element] &&
              DATA.elements[defender.element].strong === attacker.element) mod = 0.85;
     const def = defender.defense || 0;
-    const atk = attacker.attack;
-    const defReduction = Math.min(0.75, def / (def + atk * bt.defenseConstant));
+    const atk = attacker.attack || 0;
+    const defReduction = Math.min(0.75, def / ((def + atk * bt.defenseConstant) || 1));
     const raw = Math.round(atk * mod * variance * (1 - defReduction));
     return { dmg: Math.max(1, raw), advantage: mod > 1 };
   },
@@ -62,7 +62,7 @@ const Battle = {
     const s = Game.state;
     s.stage.current = Math.max(1, Math.min(stageNum, s.stage.unlocked));
     s.stage.wave = 1;
-    s.team.forEach(Monster.heal);
+    s.team.filter(Boolean).forEach(Monster.heal);
     Battle.phase = "team";
     Battle.teamPointer = 0;
     Battle.lastAttackerId = null;
@@ -163,7 +163,7 @@ const Battle = {
 
     s.enemy = {
       name: `${cfg.names[i]} (Stufe ${lv})`, emoji: cfg.emojis[i],
-      element: Object.keys(DATA.elements)[Math.floor(Math.random() * 5)],
+      element: Object.keys(DATA.elements)[Math.floor(Math.random() * Object.keys(DATA.elements).length)],
       level: lv, hp, maxHp: hp, attack, reward: 0, isWorldBoss: true,
     };
   },
@@ -262,8 +262,12 @@ const Battle = {
   },
 
   wbLost() {
-    Events.emit("toast", "💀 WorldBoss-Team gefallen – Neustart", "bad");
-    Battle.startWorldBoss(Game.state.worldBoss.level);
+    // Kein Auto-Restart: sonst loopt der Kampf endlos, wenn der Boss zu stark ist
+    Battle.mode = null;
+    Battle.wbClearTimers();
+    Game.state.enemy = null;
+    UI.kampfView = "modes";
+    Events.emit("toast", "💀 WorldBoss-Team gefallen — verbessere deine Sammlung!", "bad");
     if (UI.current === "home") Events.emit("render");
   },
 

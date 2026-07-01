@@ -164,7 +164,7 @@ const Game = {
   },
   /* Frei von Expedition (zählt NICHT Team-Nutzung) — für Fusion/Avatar/WorldBoss */
   availableCount(entry) {
-    return entry.count - Game.reservedCount(Game.groupKey(entry));
+    return Math.max(0, entry.count - Game.reservedCount(Game.groupKey(entry)));
   },
   /* Frei von Team UND Expedition — für neue Verpflichtungen (Team hinzufügen / Expedition schicken) */
   freeCount(entry) {
@@ -243,7 +243,7 @@ const Game = {
   // Navigation zurück
   backToModes() { Battle.mode = null; Battle.wbClearTimers(); UI.kampfView = "modes"; Events.emit("render"); },
   backToTeam() { Battle.mode = null; UI.kampfView = "team"; Events.emit("render"); },
-  backToStageSelect() { Battle.mode = null; UI.kampfView = "team"; Events.emit("render"); },
+  backToStageSelect() { Battle.mode = null; UI.kampfView = "stageSelect"; Events.emit("render"); },
 
   findMonster(id) {
     return Game.state.team.find(m => m.id === id);
@@ -444,7 +444,15 @@ const Game = {
   autoFillTeam(stat) {
     const s = Game.state;
     const sorted = [...s.collection].sort((a, b) => stat === "atk" ? b.attack - a.attack : b.defense - a.defense);
-    s.team = sorted.slice(0, Game.MAX_TEAM).map(e => ({ ...e, id: DATA.uid(), hp: e.maxHp, exp: 0, expToNext: 100, skills: [] }));
+    // Expeditions-Monster überspringen; Mehrfach-Kopien einer Gruppe bis availableCount erlaubt
+    const team = [];
+    for (const e of sorted) {
+      for (let i = 0; i < Game.availableCount(e) && team.length < Game.MAX_TEAM; i++) {
+        team.push({ ...e, id: DATA.uid(), hp: e.maxHp, exp: 0, expToNext: 100, skills: [] });
+      }
+      if (team.length >= Game.MAX_TEAM) break;
+    }
+    s.team = team;
     Events.emit("render");
   },
 
@@ -490,7 +498,20 @@ const Game = {
     if (dst) { dst.count += pairs; }
     else { Game.state.collection.push(Game.toCollectionEntry(fused, pairs)); }
     Game.state.collection = Game.state.collection.filter(e => e.count > 0);
+    Game._pruneTeamToCollection();
     return fused;
+  },
+
+  /* Team gegen Sammlung abgleichen: Mitglieder entfernen, deren Kopien (z.B. durch Fusion)
+     nicht mehr im Besitz sind — sonst kämpft das Team mit Geister-Monstern weiter */
+  _pruneTeamToCollection() {
+    const used = {};
+    Game.state.team = Game.state.team.filter(tm => {
+      const key = Game.groupKey(tm);
+      const entry = Game.state.collection.find(e => Game.groupKey(e) === key);
+      used[key] = (used[key] || 0) + 1;
+      return entry && used[key] <= Game.availableCount(entry);
+    });
   },
 
   /* Alle fusionierbaren Gruppen eines Rangs auf einmal max-fusionieren */

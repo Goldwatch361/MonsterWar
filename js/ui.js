@@ -8,7 +8,7 @@ const UI = {
   fusionOpen: {},       // welche Rang-Spoiler im Fusion-Tab aufgeklappt sind
   collOpen: {},         // Rang-Spoiler im Sammlung-Reiter
   dexOpen: {},          // Rang-Spoiler im Dex-Reiter
-  monsterTab: "collection", // Unter-Reiter: collection | dex | fusion
+  monsterTab: "collection", // Unter-Reiter: collection | dex
   dashView: "avatar",  // avatar | mine | expedition | profile
   expPickSlot: null,   // welcher Slot gerade im Auswahl-Modal befüllt wird
   stageChapterOpen: {}, // welche Stage-Kapitel in der Stage-Auswahl aufgeklappt sind
@@ -23,6 +23,11 @@ const UI = {
     // Modal: Klick außerhalb schließt (nur wenn als schließbar markiert)
     document.getElementById("modal").addEventListener("click", (e) => {
       if (e.target.id === "modal" && UI._modalClosable) UI.closeModal();
+    });
+    // Escape schließt das Modal
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && UI._modalClosable &&
+          !document.getElementById("modal").classList.contains("hidden")) UI.closeModal();
     });
     // Game/Battle rufen UI nicht mehr direkt auf, sondern nur über Events
     Events.on("toast", UI.toast);
@@ -104,6 +109,8 @@ const UI = {
     UI.updateTopbar();
     const view = document.getElementById("view");
     const sy = window.scrollY; // Scroll-Position merken, damit nichts springt
+    const _ss = view.querySelector(".subtab-scroll");
+    const _ssTop = _ss ? _ss.scrollTop : 0; // interner Scroll-Container (Sammlung)
     switch (UI.current) {
       case "dashboard":
         view.innerHTML = UI.renderDashboard();
@@ -113,10 +120,12 @@ const UI = {
         break;
       case "home":      view.innerHTML = UI.renderHome();    UI.refresh(); break;
       case "monster":   view.innerHTML = UI.renderMonster(); break;
+      case "fusion":    view.innerHTML = UI.renderFusion();  break;
       case "summon":    view.innerHTML = UI.renderSummon();  break;
-      case "settings":  view.innerHTML = UI.renderSettings();break;
     }
     window.scrollTo(0, sy);
+    const _ss2 = view.querySelector(".subtab-scroll");
+    if (_ss2) _ss2.scrollTop = _ssTop;
   },
 
   updateTopbar() {
@@ -137,6 +146,14 @@ const UI = {
       const n = Game.possibleFusions();
       fBadge.textContent = n > 99 ? "99+" : n;
       fBadge.style.display = n > 0 ? "" : "none";
+    }
+    // Kauf-Buttons live an Gold-/Kristallstand anpassen (ohne Re-Render)
+    document.querySelectorAll("[data-cost]").forEach(btn => {
+      const have = btn.dataset.currency === "crystals" ? s.inventory.crystals : s.gold;
+      btn.disabled = have < Number(btn.dataset.cost);
+    });
+    if (UI.current === "fusion" && UI._fuseMeta) {
+      UI._fuseMeta.forEach((_, i) => UI.updateFuseCost(i));
     }
   },
 
@@ -287,6 +304,11 @@ const UI = {
     UI.render();
   },
 
+  openSettings() {
+    UI.dashView = "settings";
+    UI.render();
+  },
+
   _skyColors(h) {
     // Keyframes: [hour, skyTop, skyMid, horizon, sunOp, moonOp, starOp]
     const K = [
@@ -427,7 +449,7 @@ const UI = {
           ${cfg.reward.emoji} Abholen${cd.ready ? ` (${cd.itemsReady}×)` : ""}
         </button>` : `
         <div class="mc-buy-desc">${cfg.reward.emoji} ${cfg.reward.label} · alle ${fmtCd(cfg.cooldown)}</div>
-        <button class="btn ${afford ? "good" : "ghost"} mc-buy-btn" onclick="Game.buyMine('${cfg.id}')" ${afford ? "" : "disabled"}>
+        <button class="btn ${afford ? "good" : "ghost"} mc-buy-btn" data-cost="${cfg.cost}" onclick="Game.buyMine('${cfg.id}')" ${afford ? "" : "disabled"}>
           💰 ${cfg.cost.toLocaleString("de-DE")} Gold kaufen
         </button>`;
 
@@ -723,6 +745,7 @@ const UI = {
     if (UI.dashView === "mine") return UI.renderMine();
     if (UI.dashView === "expedition") return UI.renderExpedition();
     if (UI.dashView === "profile") return UI.renderProfile();
+    if (UI.dashView === "settings") return UI.renderSettings();
     if (UI._mineTimer) { clearInterval(UI._mineTimer); UI._mineTimer = null; }
     const s = Game.state;
     const avatar = s.collection.find(e => Game.groupKey(e) === s.avatarKey && Game.availableCount(e) > 0)
@@ -824,6 +847,10 @@ const UI = {
         <button class="home-side-btn hsb-topleft" onclick="UI.openProfile()">
           <span class="hsb-icon">👤</span>
           <span class="hsb-label">Profil</span>
+        </button>
+        <button class="home-side-btn hsb-bottomleft" onclick="UI.openSettings()">
+          <span class="hsb-icon">⚙️</span>
+          <span class="hsb-label">Optionen</span>
         </button>
         <div class="home-side-stack">
           <button class="home-side-btn" onclick="UI.openExpedition()">
@@ -1060,7 +1087,7 @@ const UI = {
         <p class="hint" style="text-align:left;padding:6px 0 8px">Die höchste Stage (🚩) startet nach einer Niederlage automatisch bei Welle 1 neu — dein Team kämpft endlos weiter. Nach einem Sieg geht es direkt zur nächsten Stage. Geschaffte Stages (✓) kannst du einzeln wiederholen.</p>
         ${frontier > size ? `
           <div class="stage-jump-row">
-            <input type="number" id="stage-jump-input" class="stage-jump-input" placeholder="Stage-Nr. springen…" min="1" max="${frontier}">
+            <input type="number" id="stage-jump-input" class="stage-jump-input" placeholder="Stage 1–${frontier.toLocaleString("de-DE")}…" min="1" max="${frontier}" onkeydown="if(event.key==='Enter')UI.jumpToStage()">
             <button class="btn sm" onclick="UI.jumpToStage()">Springen</button>
           </div>` : ""}
         <div class="stage-chapters">${chaptersHtml}</div>
@@ -1159,7 +1186,13 @@ const UI = {
     const now = document.getElementById("stg-now");
     if (now) now.textContent = `🏟️ Stage ${st.current} · Welle ${st.wave}/${W}${Battle.frontier ? " 🚩" : ""}`;
     const dotsEl = document.getElementById("stg-dots");
-    if (dotsEl) dotsEl.innerHTML = UI.waveDotsHtml(st, W);
+    if (dotsEl) {
+      if (dotsEl.children.length !== W) dotsEl.innerHTML = UI.waveDotsHtml(st, W);
+      else [...dotsEl.children].forEach((el, i) => {
+        el.classList.toggle("done", i + 1 < st.wave);
+        el.classList.toggle("now", i + 1 === st.wave);
+      });
+    }
 
     // Gegner aktualisieren
     document.getElementById("bt-emoji").textContent = e.emoji;
@@ -1247,10 +1280,10 @@ const UI = {
       <div class="subtabs">
         <button class="subtab ${tab === "collection" ? "active" : ""}" onclick="UI.setMonsterTab('collection')">Sammlung</button>
         <button class="subtab ${tab === "dex" ? "active" : ""}" onclick="UI.setMonsterTab('dex')">Dex</button>
-        <button class="subtab ${tab === "fusion" ? "active" : ""}" onclick="UI.setMonsterTab('fusion')">⚛️ Fusion</button>
       </div>`;
-    const content = tab === "dex" ? UI.renderDex() : tab === "fusion" ? UI.renderFusion() : UI.renderCollection();
-    return subbar + content;
+    const content = tab === "dex" ? UI.renderDex() : UI.renderCollection();
+    // Eigener Scroll-Container unter der Tab-Auswahl — die Box selbst scrollt nie mit
+    return subbar + `<div class="subtab-scroll">${content}</div>`;
   },
 
   /* Rang-Akkordeon-Sektion (gemeinsam für Sammlung, Dex & Fusion).
@@ -1396,10 +1429,10 @@ const UI = {
           ${locked
             ? `<div class="sc-lock">🔒 Ab Level ${egg.minLevel}</div>`
             : `<div class="summon-btns">
-                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 1)" ${maxN >= 1 ? "" : "disabled"}>×1</button>
-                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 10)" ${maxN >= 10 ? "" : "disabled"}>×10</button>
-                 <button class="btn sm" onclick="Game.buyAndCrack('${egg.id}', 100)" ${maxN >= 100 ? "" : "disabled"}>×100</button>
-                 <button class="btn sm good" onclick="Game.buyAndCrack('${egg.id}', 'max')" ${maxN >= 1 ? "" : "disabled"}>Max ${maxN.toLocaleString("de-DE")}</button>
+                 <button class="btn sm" data-cost="${egg.cost}" data-currency="${egg.currency}" onclick="Game.buyAndCrack('${egg.id}', 1)" ${maxN >= 1 ? "" : "disabled"}>×1</button>
+                 <button class="btn sm" data-cost="${egg.cost * 10}" data-currency="${egg.currency}" onclick="Game.buyAndCrack('${egg.id}', 10)" ${maxN >= 10 ? "" : "disabled"}>×10</button>
+                 <button class="btn sm" data-cost="${egg.cost * 100}" data-currency="${egg.currency}" onclick="Game.buyAndCrack('${egg.id}', 100)" ${maxN >= 100 ? "" : "disabled"}>×100</button>
+                 <button class="btn sm good" data-cost="${egg.cost}" data-currency="${egg.currency}" onclick="Game.buyAndCrack('${egg.id}', 'max')" ${maxN >= 1 ? "" : "disabled"}>Max ${maxN.toLocaleString("de-DE")}</button>
                </div>
                ${cnt > 0 ? `<div class="summon-btns" style="margin-top:5px">
                  <span class="sc-stock-label">🥚 ×${cnt}</span>
@@ -1470,7 +1503,8 @@ const UI = {
           if (p >= maxPairs) break;
           options += `<option value="${p}">${p.toLocaleString("de-DE")}×</option>`;
         }
-        if (maxPairs > 1) options += `<option value="max">Max (${maxPairs.toLocaleString("de-DE")}×)</option>`;
+        // Max immer anhängen — bei genau 1 Paar wäre das Dropdown sonst leer
+        options += `<option value="max">${maxPairs > 1 ? `Max (${maxPairs.toLocaleString("de-DE")}×)` : "1×"}</option>`;
         const resultRarity = DATA.nextRarity(m.rarity);
         const fuseCostPer = Game.fuseCost(resultRarity);
         const canAffordOne = Game.state.gold >= fuseCostPer;
@@ -1525,23 +1559,20 @@ const UI = {
 
   renderSettings() {
     const s = Game.state;
-    const mins = Math.floor((s.playSeconds || 0) / 60);
     return `
       <div class="panel">
-        <h2>📊 Statistik</h2>
-        <div class="kv"><span>Gegner besiegt</span><b>${s.kills || 0}</b></div>
-        <div class="kv"><span>Höchste freigeschaltete Stage</span><b>${s.stage.unlocked}</b></div>
-        <div class="kv"><span>Aktuelle Stage</span><b>Stage ${s.stage.current} · Welle ${s.stage.wave}</b></div>
-        <div class="kv"><span>Monster gesammelt</span><b>${s.collection.length}</b></div>
-        <div class="kv"><span>Spielzeit</span><b>${mins} min</b></div>
-      </div>
-      <div class="panel">
+        <div class="mode-bar">
+          <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
+        </div>
         <h2>⚙️ Einstellungen</h2>
         <div class="kv"><span>Autosave (alle 30s)</span>
           <button class="btn sm ${s.settings.autosave?"good":"ghost"}" onclick="Game.toggleSetting('autosave')">
             ${s.settings.autosave?"AN":"AUS"}</button></div>
         <div class="btn-row" style="margin-top:12px">
           <button class="btn" onclick="Game.manualSave()">💾 Jetzt speichern</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn ghost" onclick="UI.showTutorial()">📖 Tutorial anzeigen</button>
         </div>
         <div class="btn-row">
           <button class="btn bad" onclick="Game.askReset()">🗑️ Spielstand löschen</button>
@@ -1662,7 +1693,7 @@ const UI = {
       <h2>Willkommen, Warlord!</h2>
       <p>Dein <b>Flammenwolf</b> ist bereit. Der Kampf läuft <b>automatisch</b> — dein Team greift alle 2 Sekunden an.</p>
       <p>Besiege Gegner für <b style="color:var(--gold)">Gold</b> & XP, <b>beschwöre</b> neue Monster und <b>fusioniere</b> gleiche Monster zu höheren Rängen.</p>
-      <p>Auch wenn du offline bist, sammelt dein Team weiter Belohnungen (max. 8 Std).</p>
+      <p>Minen und Expeditionen laufen auch weiter, während du offline bist.</p>
       <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Los geht's! ⚔️</button>
     `);
   },

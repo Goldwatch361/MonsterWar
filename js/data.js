@@ -99,7 +99,7 @@ DATA.eggTypes = [
     id: "premium", name: "Premium-Ei", emoji: "✨", currency: "gold", cost: 1500, minLevel: 5,
     dropMinLevel: 5, dropWeight: 6,
     table: [
-      { rarity: "selten", chance: 0.60 }, { rarity: "episch", chance: 0.29 },
+      { rarity: "selten", chance: 0.70 }, { rarity: "episch", chance: 0.29 },
       { rarity: "legendaer", chance: 0.01 },
     ],
   },
@@ -137,6 +137,7 @@ DATA.eggTypes = [
   },
   {
     id: "transcend", name: "Transzendenz-Ei", emoji: "🌠", currency: "gold", cost: 1500000, minLevel: 60,
+    dropMinLevel: 85, dropWeight: 1,
     table: [
       { rarity: "uralt", chance: 0.40 }, { rarity: "kosmisch", chance: 0.30 },
       { rarity: "titanisch", chance: 0.20 }, { rarity: "transzendent", chance: 0.08 },
@@ -179,9 +180,6 @@ DATA.worldBoss = {
   dmgPct: 0.10,
   goldBase: 1000, goldLevelPow: 1.5,
 };
-
-/* Fähigkeiten-Pool für Fusion (zufällige Bonus-Fähigkeit) */
-DATA.fusionSkills = ["Raserei", "Eisenschild", "Doppelhieb", "Urgewalt", "Seelenfraß", "Lichtbann"];
 
 /* Gegner-Pool nach Level-Band. Basiswerte werden mit der Formel skaliert. */
 DATA.enemyTiers = [
