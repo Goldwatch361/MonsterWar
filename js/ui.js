@@ -1668,6 +1668,47 @@ const UI = {
     }
   },
 
+  /* ---- Fusions-Ergebnis: Monster fliegen von links/rechts zusammen, Glow, dann Auflistung ---- */
+  showFusionResult(srcEmoji, srcColor, results, totalCost) {
+    if (!results || !results.length) return;
+    const total = results.reduce((s, r) => s + r.count, 0);
+    const main = results[0];
+    const rc = UI.rarColor(main.rarity);
+    const rows = results.length > 1 ? results.map(r => {
+      const c = UI.rarColor(r.rarity);
+      return `<div class="erl-row">
+        <span class="erl-emoji">${r.emoji}</span>
+        <div class="erl-info">
+          <span class="erl-name" style="color:${c}">${r.name}</span>
+          <span class="erl-rar" style="color:${c}">${DATA.rarities[r.rarity].name}</span>
+        </div>
+        <span class="erl-count">×${r.count.toLocaleString("de-DE")}</span>
+      </div>`;
+    }).join("") : "";
+    UI.modal(`
+      <div class="fusion-reveal">
+        <div class="fz-stage" id="fz-stage">
+          <span class="fz-mon fz-left" style="--rcolor:${srcColor}">${srcEmoji}</span>
+          <span class="fz-burst" style="--rcolor:${rc}"></span>
+          <span class="fz-mon fz-right" style="--rcolor:${srcColor}">${srcEmoji}</span>
+        </div>
+        <div class="fz-result ep-hidden" id="fz-result">
+          <div class="reveal-mon-emoji ${UI.glowClass(main.rarity)}" style="color:${rc}">${main.emoji}</div>
+          <div class="reveal-mon-name" style="color:${rc}">${main.name}</div>
+          <div class="reveal-mon-rar">${DATA.rarities[main.rarity].name}${total > 1 ? ` · ${total.toLocaleString("de-DE")}× fusioniert` : ""}</div>
+          ${rows ? `<div class="egg-result-list">${rows}</div>` : ""}
+          <p style="margin-top:8px">−${totalCost.toLocaleString("de-DE")} 💰</p>
+          <button class="btn" style="margin-top:10px" onclick="UI.closeModal()">Super! ⚛</button>
+        </div>
+      </div>`, false);
+    setTimeout(() => {
+      const stage = document.getElementById("fz-stage"), res = document.getElementById("fz-result");
+      if (stage) stage.classList.add("ep-gone");
+      if (res) res.classList.remove("ep-hidden");
+      UI._modalClosable = true;
+    }, 1350);
+  },
+
   /* ---- Toast ---- */
   toast(msg, type = "") {
     const t = document.createElement("div");

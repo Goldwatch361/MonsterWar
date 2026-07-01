@@ -530,15 +530,18 @@ const Game = {
     }
     s.gold -= totalCost;
 
-    let totalMade = 0, lastFused = null;
+    let totalMade = 0;
+    const results = [];
+    const srcEmoji = entries[0].emoji, srcColor = DATA.rarities[rarity].color;
     for (const entry of [...entries]) {
       const pairs = Math.floor(Game.availableCount(entry) / 2);
       if (pairs < 1) continue;
-      lastFused = Game._applyFusion(entry, pairs);
+      const fused = Game._applyFusion(entry, pairs);
+      results.push({ emoji: fused.emoji, name: fused.name, rarity: fused.rarity, count: pairs });
       totalMade += pairs;
     }
     if (!totalMade) { Events.emit("toast","Keine fusionierbaren Paare.", "bad"); return; }
-    Events.emit("toast",`⚛ ${totalMade}× fusioniert → ${DATA.rarities[lastFused.rarity].name}! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    UI.showFusionResult(srcEmoji, srcColor, results, totalCost);
     Events.emit("render");
   },
 
@@ -561,8 +564,9 @@ const Game = {
       return;
     }
     s.gold -= totalCost;
+    const srcEmoji = entry.emoji, srcColor = DATA.rarities[entry.rarity].color;
     const fused = Game._applyFusion(entry, p);
-    Events.emit("toast",`⚛ ${p}× Fusion → ${fused.name} (${DATA.rarities[fused.rarity].name})! (−${totalCost.toLocaleString("de-DE")} 💰)`, "good");
+    UI.showFusionResult(srcEmoji, srcColor, [{ emoji: fused.emoji, name: fused.name, rarity: fused.rarity, count: p }], totalCost);
     Events.emit("render");
   },
 
