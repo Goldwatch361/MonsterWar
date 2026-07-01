@@ -470,6 +470,11 @@ body {
 }
 .fz-result { animation: pop .35s ease; }
 .fz-result .egg-result-list { margin-top: 10px; }
+/* Glow-Burst beim Ei-Öffnen: zündet im Moment des Aufbrechens (Reveal bei ~0.96s) */
+.egg-burst {
+  left: 50%; top: 50%; margin: -13px 0 0 -13px;
+  animation-delay: .7s;
+}
 .egg-phase1 { display: flex; align-items: center; justify-content: center; min-height: 140px; }
 .egg-phase2 { text-align: center; }
 .ep-hidden  { display: none !important; }
@@ -1058,6 +1063,7 @@ button { font-family: inherit; cursor: pointer; }
 #modal { position: fixed; inset: 0; z-index: 50; background: rgba(5,7,12,.72); display: flex; align-items: center; justify-content: center; padding: 18px; }
 #modal.hidden { display: none; }
 #modal-box {
+  position: relative;
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
   padding: 22px; max-width: 420px; width: 100%; text-align: center;
   box-shadow: 0 20px 60px rgba(0,0,0,.5);
