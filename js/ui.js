@@ -1587,6 +1587,7 @@ const UI = {
       const m = monsters[0];
       const rc = UI.rarColor(m.rarity);
       UI.modal(`
+        <span class="fz-burst egg-burst" style="--rcolor:${rc}"></span>
         <div class="egg-reveal single">
           <div class="egg-phase1" id="ep1">
             <div class="reveal-egg-emoji">${eggType.emoji}</div>
@@ -1650,7 +1651,11 @@ const UI = {
           <div class="egg-result-list">${rows}</div>
           <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Super! 🎉</button>`;
       };
+      // Burst-Farbe = höchster Rang im Batch
+      const topRarity = monsters.reduce((best, m) =>
+        DATA.rarities[m.rarity].order > DATA.rarities[best].order ? m.rarity : best, monsters[0].rarity);
       UI.modal(`
+        <span class="fz-burst egg-burst" style="--rcolor:${UI.rarColor(topRarity)}"></span>
         <div class="egg-reveal single" id="multi-wrap">
           <div class="egg-phase1" id="ep1">
             <div class="reveal-egg-emoji">${eggType.emoji}</div>
@@ -1704,10 +1709,12 @@ const UI = {
           <span class="fz-mon fz-right" style="--rcolor:${srcColor}">${groupHtml}</span>
         </div>
         <div class="fz-result ep-hidden" id="fz-result">
-          <div class="reveal-mon-emoji ${UI.glowClass(main.rarity)}" style="color:${rc}">${main.emoji}</div>
-          <div class="reveal-mon-name" style="color:${rc}">${main.name}</div>
-          <div class="reveal-mon-rar">${DATA.rarities[main.rarity].name}${total > 1 ? ` · ${total.toLocaleString("de-DE")}× fusioniert` : ""}</div>
-          ${rows ? `<div class="egg-result-list">${rows}</div>` : ""}
+          ${rows
+            ? `<h3 style="margin:0 0 10px;font-size:15px">⚛ ${total.toLocaleString("de-DE")}× fusioniert</h3>
+               <div class="egg-result-list">${rows}</div>`
+            : `<div class="reveal-mon-emoji ${UI.glowClass(main.rarity)}" style="color:${rc}">${main.emoji}</div>
+               <div class="reveal-mon-name" style="color:${rc}">${main.name}</div>
+               <div class="reveal-mon-rar">${DATA.rarities[main.rarity].name}${total > 1 ? ` · ${total.toLocaleString("de-DE")}× fusioniert` : ""}</div>`}
           <p style="margin-top:8px">−${totalCost.toLocaleString("de-DE")} 💰</p>
           <button class="btn" style="margin-top:10px" onclick="UI.closeModal()">Super! ⚛</button>
         </div>
