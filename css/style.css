@@ -428,6 +428,46 @@ body {
 
 /* ===== Beschwörungs-Ergebnis (Einzel-Ei-Animation) ===== */
 .egg-reveal.single { text-align: center; }
+
+/* ===== Fusion: Monster fliegen zusammen + Glow-Burst ===== */
+.fusion-reveal { text-align: center; }
+.fz-stage { position: relative; height: 120px; display: flex; align-items: center; justify-content: center; }
+.fz-mon {
+  position: absolute; font-size: 54px; line-height: 1;
+  filter: drop-shadow(0 0 10px var(--rcolor, #7c5cff));
+}
+.fz-left  { animation: fzSmashL 1s ease forwards; }
+.fz-right { animation: fzSmashR 1s ease forwards; }
+/* Kurz stehen (mit Mini-Anlauf nach hinten), dann ruckartig zusammenstoßen */
+@keyframes fzSmashL {
+  0%   { transform: translateX(-90px)  scale(.9); opacity: 0; }
+  12%  { transform: translateX(-90px)  scale(1);  opacity: 1; }
+  70%  { transform: translateX(-100px) scale(1);  opacity: 1; animation-timing-function: cubic-bezier(.9,0,1,1); }
+  80%  { transform: translateX(0) scale(1.15); opacity: 1; }
+  88%  { transform: translateX(0) scale(1.35); opacity: 1; filter: drop-shadow(0 0 24px #fff) brightness(2.5); }
+  100% { transform: translateX(0) scale(.6); opacity: 0; filter: drop-shadow(0 0 30px #fff) brightness(3); }
+}
+@keyframes fzSmashR {
+  0%   { transform: translateX(90px)  scale(.9); opacity: 0; }
+  12%  { transform: translateX(90px)  scale(1);  opacity: 1; }
+  70%  { transform: translateX(100px) scale(1);  opacity: 1; animation-timing-function: cubic-bezier(.9,0,1,1); }
+  80%  { transform: translateX(0) scale(1.15); opacity: 1; }
+  88%  { transform: translateX(0) scale(1.35); opacity: 1; filter: drop-shadow(0 0 24px #fff) brightness(2.5); }
+  100% { transform: translateX(0) scale(.6); opacity: 0; filter: drop-shadow(0 0 30px #fff) brightness(3); }
+}
+.fz-burst {
+  position: absolute; width: 26px; height: 26px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 15%, var(--rcolor, #7c5cff) 50%, transparent 72%);
+  opacity: 0; pointer-events: none;
+  animation: fzBurst .55s ease-out .8s forwards;
+}
+@keyframes fzBurst {
+  0%   { opacity: 0; transform: scale(.3); }
+  30%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(10); }
+}
+.fz-result { animation: pop .35s ease; }
+.fz-result .egg-result-list { margin-top: 10px; }
 .egg-phase1 { display: flex; align-items: center; justify-content: center; min-height: 140px; }
 .egg-phase2 { text-align: center; }
 .ep-hidden  { display: none !important; }
