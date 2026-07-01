@@ -101,6 +101,7 @@ const Battle = {
   onEnemyDefeated() {
     const s = Game.state;
     const st = s.stage;
+    s.wavesCleared = (s.wavesCleared || 0) + 1;
 
     if (st.wave >= Battle.WAVES_PER_STAGE) {
       // Stage geschafft!

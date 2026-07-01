@@ -9,7 +9,7 @@ const UI = {
   collOpen: {},         // Rang-Spoiler im Sammlung-Reiter
   dexOpen: {},          // Rang-Spoiler im Dex-Reiter
   monsterTab: "collection", // Unter-Reiter: collection | dex | fusion
-  dashView: "avatar",  // avatar | mine | expedition
+  dashView: "avatar",  // avatar | mine | expedition | profile
   expPickSlot: null,   // welcher Slot gerade im Auswahl-Modal befüllt wird
 
   init() {
@@ -273,6 +273,11 @@ const UI = {
     UI.render();
   },
 
+  openProfile() {
+    UI.dashView = "profile";
+    UI.render();
+  },
+
   _skyColors(h) {
     // Keyframes: [hour, skyTop, skyMid, horizon, sunOp, moonOp, starOp]
     const K = [
@@ -440,19 +445,21 @@ const UI = {
   /* ---- Expedition ---- */
   _expCd(slotIdx) {
     const slot = Game.state.expedition.slots[slotIdx];
-    if (!slot) return { ready: false, pct: 0, text: "—" };
-    const elapsed = Date.now() - slot.startTime;
-    const total = slot.durationMs;
-    const pct = Math.min(100, (elapsed / total) * 100);
-    const ready = elapsed >= total;
-    const remaining = Math.max(0, total - elapsed);
-    const h = Math.floor(remaining / 3600000);
+    if (!slot) return { ready: false, pct: 0, text: "—", cycles: 0 };
+    const elapsed   = Date.now() - slot.startTime;
+    const total     = slot.durationMs;
+    const cycles    = Math.floor(elapsed / total);
+    const cycleElapsed = elapsed % total;
+    const pct       = Math.min(100, (cycleElapsed / total) * 100);
+    const ready     = cycles > 0;
+    const remaining = total - cycleElapsed;
+    const h  = Math.floor(remaining / 3600000);
     const mm = Math.floor((remaining % 3600000) / 60000);
     const sec = Math.floor((remaining % 60000) / 1000);
-    const text = ready ? "Fertig!" : (h > 0
+    const text = h > 0
       ? `${h}:${String(mm).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
-      : `${mm}:${String(sec).padStart(2,"0")}`);
-    return { ready, pct, text };
+      : `${mm}:${String(sec).padStart(2,"0")}`;
+    return { ready, pct, text, cycles };
   },
 
   _startExpeditionTimer() {
@@ -471,8 +478,13 @@ const UI = {
         if (fill) fill.style.width = cd.pct + "%";
         if (btn) {
           btn.disabled = !cd.ready;
-          btn.textContent = cd.ready ? "🎁 Abholen" : "⏳ Unterwegs";
+          btn.textContent = cd.ready ? `🎁 ${cd.cycles > 1 ? cd.cycles + "× " : ""}Abholen` : "⏳ Unterwegs";
           btn.className = `btn ${cd.ready ? "good" : "ghost"} mc-collect-btn`;
+        }
+        const cyclesEl = document.getElementById(`exp-cycles-${i}`);
+        if (cyclesEl) {
+          cyclesEl.textContent = cd.cycles > 0 ? `${cd.cycles}× bereit` : "läuft…";
+          cyclesEl.className = `mc-sub exp-cycles-badge ${cd.cycles > 0 ? "exp-cycles-ready" : ""}`;
         }
       }
       if (!anyVisible) { clearInterval(UI._expTimer); UI._expTimer = null; }
@@ -516,17 +528,21 @@ const UI = {
             <span class="mc-emoji ${cd.ready ? "mine-ready-pulse" : ""}">${slot.emoji}</span>
             <div class="mc-title">
               <div class="mc-name" style="color:${rc}">${slot.name}</div>
-              <div class="mc-sub">${DATA.rarities[slot.rarity].name} · ${dur ? dur.label : ""}</div>
+              <div class="mc-sub">${DATA.rarities[slot.rarity].name} · ${dur ? dur.label : "1h"}</div>
             </div>
           </div>
           <div class="mc-bar-row">
             <div class="mc-bar"><div class="mc-fill" id="exp-fill-${i}" style="width:${cd.pct}%;background:${rc}"></div></div>
             <span class="mc-timer mine-countdown ${cd.ready ? "mine-cd-ready" : ""}" id="exp-cd-${i}">${cd.text}</span>
           </div>
-          <div class="btn-row" style="margin-top:8px">
+          <div class="kv" style="padding:3px 0;border:none">
+            <span class="mc-sub">Nächster Zyklus</span>
+            <span class="mc-sub exp-cycles-badge ${cd.cycles > 0 ? "exp-cycles-ready" : ""}" id="exp-cycles-${i}">${cd.cycles > 0 ? `${cd.cycles}× bereit` : "läuft…"}</span>
+          </div>
+          <div class="btn-row" style="margin-top:6px">
             <button class="btn ${cd.ready ? "good" : "ghost"} mc-collect-btn" id="exp-btn-${i}"
                     onclick="Game.expeditionClaim(${i})" ${cd.ready ? "" : "disabled"}>
-              ${cd.ready ? "🎁 Abholen" : "⏳ Unterwegs"}
+              ${cd.ready ? `🎁 ${cd.cycles > 1 ? cd.cycles + "× " : ""}Abholen` : "⏳ Unterwegs"}
             </button>
             <button class="btn bad sm" onclick="Game.expeditionRecall(${i})" title="Zurückrufen (kein Reward)">✕</button>
           </div>`;
@@ -598,9 +614,99 @@ const UI = {
     `);
   },
 
+  renderProfile() {
+    const s = Game.state;
+    const kv = (label, value) => `<div class="kv"><span>${label}</span><b>${value}</b></div>`;
+    const n = v => Math.round(v).toLocaleString("de-DE");
+    const fmtTime = sec => {
+      const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+      return h > 0 ? `${n(h)}h ${m}m` : `${m}m`;
+    };
+
+    /* ---- Sammlung ---- */
+    const totalMonsters  = s.collection.reduce((t, e) => t + e.count, 0);
+    const uniqueTypes    = s.collection.length;
+    const totalTemplates = Object.keys(DATA.templates).length;
+    const onExpedition   = s.expedition.slots.filter(Boolean).length;
+    const fusionCount    = Game.possibleFusions();
+
+    const highestRarity = s.collection.reduce((best, e) =>
+      (!best || DATA.rarities[e.rarity].order > DATA.rarities[best].order) ? e.rarity : best, null);
+    const strongestAtk = s.collection.reduce((b, e) => (!b || e.attack  > b.attack)  ? e : b, null);
+    const strongestDef = s.collection.reduce((b, e) => (!b || e.defense > b.defense) ? e : b, null);
+    const strongestHp  = s.collection.reduce((b, e) => (!b || e.maxHp   > b.maxHp)   ? e : b, null);
+
+    /* ---- Seltenheits-Verteilung ---- */
+    const rarDist = {};
+    for (const e of s.collection) rarDist[e.rarity] = (rarDist[e.rarity] || 0) + e.count;
+    const rarDistRows = [...DATA.rarityOrder].reverse()
+      .filter(r => rarDist[r])
+      .map(r => `<div class="kv">
+        <span style="color:${DATA.rarities[r].color}">${DATA.rarities[r].name}</span>
+        <b>${n(rarDist[r])}</b>
+      </div>`).join("") || kv("—", "Keine Monster");
+
+    /* ---- Kampf ---- */
+    const stageCleared = Object.values(s.stage.best).filter(w => w >= Battle.WAVES_PER_STAGE).length;
+    const totalEggsInv = Object.values(s.inventory.eggs).reduce((t, v) => t + v, 0);
+
+    return `
+      <div class="panel">
+        <div class="mode-bar">
+          <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
+        </div>
+        <h2>👤 Profil</h2>
+
+        <div class="prof-section">
+          <div class="section-title">⭐ Spieler</div>
+          ${kv("Level", s.playerLevel)}
+          ${kv("Aktuelle XP", `${n(Math.floor(s.playerExp || 0))} / ${n(Game.playerExpToNext())}`)}
+          ${kv("Gesamt XP verdient", n(Math.floor(s.xpEarned || 0)))}
+          ${kv("Spielzeit", fmtTime(s.playSeconds || 0))}
+        </div>
+
+        <div class="prof-section">
+          <div class="section-title">⚔️ Kampfkraft (alle Monster)</div>
+          ${kv("⚔️ Gesamt ATK", n(Game.totalAttack()))}
+          ${kv("🛡️ Gesamt DEF", n(Game.totalDefense()))}
+          ${kv("❤️ Gesamt HP", n(Game.totalHP()))}
+        </div>
+
+        <div class="prof-section">
+          <div class="section-title">💰 Ressourcen</div>
+          ${kv("Gold (aktuell)", n(s.gold))}
+          ${kv("Gesamt Gold verdient", n(s.goldEarned || 0))}
+          ${kv("💎 Kristalle", n(s.inventory.crystals))}
+          ${kv("🥚 Eier im Inventar", n(totalEggsInv))}
+        </div>
+
+        <div class="prof-section">
+          <div class="section-title">🐾 Sammlung</div>
+          ${kv("Monster gesamt (alle Zeit)", n(s.monstersEarned || 0))}
+          ${kv("Monster aktuell (im Besitz)", n(totalMonsters))}
+          ${kv("Mögliche Fusionen", n(fusionCount))}
+          ${highestRarity ? kv("Höchste Seltenheit", `<span style="color:${DATA.rarities[highestRarity].color}">${DATA.rarities[highestRarity].name}</span>`) : ""}
+          ${strongestAtk ? kv("Stärkstes ATK", `${strongestAtk.emoji} ${strongestAtk.name} (${n(strongestAtk.attack)})`) : ""}
+          ${strongestDef ? kv("Stärkstes DEF", `${strongestDef.emoji} ${strongestDef.name} (${n(strongestDef.defense)})`) : ""}
+          ${strongestHp  ? kv("Meiste HP",     `${strongestHp.emoji} ${strongestHp.name} (${n(strongestHp.maxHp)})`) : ""}
+        </div>
+
+        <div class="prof-section">
+          <div class="section-title">⚔️ Kampf</div>
+          ${kv("💀 Getötete Gegner", n(s.kills || 0))}
+          ${kv("🌊 Wellen insgesamt", n(s.wavesCleared || 0))}
+          ${kv("🗺️ Höchste Stage", s.stage.unlocked)}
+          ${kv("✅ Abgeschlossene Stages", stageCleared)}
+          ${kv("👑 WorldBoss Level", s.worldBoss.level)}
+          ${kv("👑 WorldBoss Bestleistung", (s.worldBoss.best || 0) > 0 ? `Level ${s.worldBoss.best}` : "—")}
+        </div>
+      </div>`;
+  },
+
   renderDashboard() {
     if (UI.dashView === "mine") return UI.renderMine();
     if (UI.dashView === "expedition") return UI.renderExpedition();
+    if (UI.dashView === "profile") return UI.renderProfile();
     if (UI._mineTimer) { clearInterval(UI._mineTimer); UI._mineTimer = null; }
     const s = Game.state;
     const avatar = s.collection.find(e => Game.groupKey(e) === s.avatarKey && Game.availableCount(e) > 0)
@@ -699,15 +805,19 @@ const UI = {
     return `
       <div class="home-avatar-wrap">
         ${bg}
+        <button class="home-side-btn hsb-topleft" onclick="UI.openProfile()">
+          <span class="hsb-icon">👤</span>
+          <span class="hsb-label">Profil</span>
+        </button>
         <div class="home-side-stack">
-          <button class="home-side-btn" onclick="UI.openMine()">
-            <span class="hsb-icon">⛏️</span>
-            <span class="hsb-label">Mine</span>
-          </button>
           <button class="home-side-btn" onclick="UI.openExpedition()">
             <span class="hsb-icon">🧭</span>
             <span class="hsb-label">Expedition</span>
             ${_expReady ? `<span class="hsb-badge">${_expReady}</span>` : ""}
+          </button>
+          <button class="home-side-btn" onclick="UI.openMine()">
+            <span class="hsb-icon">⛏️</span>
+            <span class="hsb-label">Mine</span>
           </button>
         </div>
         <div class="home-av-float ${UI.glowClass(avatar.rarity)}" style="--rcolor:${rc}"
@@ -1385,14 +1495,25 @@ const UI = {
     } else {
       // Multi: erst Ei-Crack-Animation, dann gruppierte Liste
       const buildList = () => {
-        const map = new Map();
-        for (const m of monsters) {
-          const key = `${m.name}|${m.rarity}`;
-          if (map.has(key)) map.get(key).count++;
-          else map.set(key, { m, count: 1 });
+        let grouped;
+        let total;
+        if (monsters[0]?._displayCount != null) {
+          // Vorgruppierte Daten (großer Batch >100)
+          total = monsters.reduce((s, m) => s + m._displayCount, 0);
+          grouped = monsters
+            .map(m => ({ m, count: m._displayCount }))
+            .sort((a, b) => (DATA.rarities[b.m.rarity]?.order ?? 0) - (DATA.rarities[a.m.rarity]?.order ?? 0));
+        } else {
+          total = monsters.length;
+          const map = new Map();
+          for (const m of monsters) {
+            const key = `${m.name}|${m.rarity}`;
+            if (map.has(key)) map.get(key).count++;
+            else map.set(key, { m, count: 1 });
+          }
+          grouped = [...map.values()].sort((a, b) =>
+            (DATA.rarities[b.m.rarity]?.order ?? 0) - (DATA.rarities[a.m.rarity]?.order ?? 0));
         }
-        const grouped = [...map.values()].sort((a, b) =>
-          (DATA.rarities[b.m.rarity]?.order ?? 0) - (DATA.rarities[a.m.rarity]?.order ?? 0));
         const rows = grouped.map(({ m, count }) => {
           const rc = UI.rarColor(m.rarity);
           return `<div class="erl-row">
@@ -1401,11 +1522,11 @@ const UI = {
               <span class="erl-name" style="color:${rc}">${m.name}</span>
               <span class="erl-rar" style="color:${rc}">${DATA.rarities[m.rarity].name}</span>
             </div>
-            <span class="erl-count">×${count}</span>
+            <span class="erl-count">×${count.toLocaleString("de-DE")}</span>
           </div>`;
         }).join("");
         return `
-          <div style="font-size:26px;margin-bottom:2px">${eggType.emoji} ×${monsters.length}</div>
+          <div style="font-size:26px;margin-bottom:2px">${eggType.emoji} ×${total.toLocaleString("de-DE")}</div>
           <h3 style="margin:0 0 10px;font-size:15px">${eggType.name}</h3>
           <div class="egg-result-list">${rows}</div>
           <button class="btn" style="margin-top:14px" onclick="UI.closeModal()">Super! 🎉</button>`;

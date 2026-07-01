@@ -23,8 +23,10 @@ const Game = {
       stage: { current: 1, unlocked: 1, wave: 1, best: {} },
       worldBoss: { level: 1, best: 0 },
       kills: 0,
+      wavesCleared: 0,
       goldEarned: 0,
       xpEarned: 0,
+      monstersEarned: 1,
       playSeconds: 0,
       settings: { sound: true, autosave: true },
       lastSaveTime: Date.now(),
@@ -85,6 +87,10 @@ const Game = {
       // Expeditions-Migration: fehlendes Feld initialisieren
       if (!Game.state.expedition) Game.state.expedition = { level: 1, exp: 0, slots: [null, null, null] };
       if (!Game.state.expedition.slots) Game.state.expedition.slots = [null, null, null];
+      // monstersEarned-Migration: bei alten Saves aktuellen Bestand als Mindestwert setzen
+      if (Game.state.monstersEarned == null)
+        Game.state.monstersEarned = Game.state.collection.reduce((n, e) => n + e.count, 0);
+      if (Game.state.wavesCleared == null) Game.state.wavesCleared = 0;
       // Ungültige Monster entfernen: unbekanntes Template, unbekannte Seltenheit,
       // oder Seltenheit unter dem Basis-Rang des Templates (z.B. Glutbär auf Normal)
       const _isValid = m => {
@@ -283,6 +289,7 @@ const Game = {
     const existing = Game.state.collection.find(e => Game.groupKey(e) === key);
     if (existing) { existing.count++; }
     else { Game.state.collection.push(Game.toCollectionEntry(m, 1)); }
+    Game.state.monstersEarned = (Game.state.monstersEarned || 0) + 1;
   },
 
   /* ---- Ei-Beschwörung ---- */
@@ -322,6 +329,7 @@ const Game = {
       const key = templateId + "|" + rarity;
       keyCounts.set(key, (keyCounts.get(key) || 0) + 1);
     }
+    const displayResults = [];
     for (const [key, cnt] of keyCounts) {
       const [templateId, rarity] = key.split("|");
       const mon = Monster.create(templateId, rarity);
@@ -329,8 +337,11 @@ const Game = {
       const existing = Game.state.collection.find(e => Game.groupKey(e) === cKey);
       if (existing) existing.count += cnt;
       else Game.state.collection.push(Game.toCollectionEntry(mon, cnt));
+      Game.state.monstersEarned = (Game.state.monstersEarned || 0) + cnt;
+      const tpl = DATA.templates[templateId];
+      displayResults.push({ emoji: tpl.emoji, name: tpl.name, rarity, _displayCount: cnt });
     }
-    return null; // kein Modal für große Batches
+    return displayResults;
   },
 
   /* Ei kaufen & sofort öffnen */
@@ -605,10 +616,10 @@ const Game = {
       e.level++;
       ups++;
     }
-    if (ups > 0) UI.toast(`🧭 Expeditions-Level ${e.level}! Neue Slots/Laufzeiten könnten freigeschaltet sein.`, "good");
+    if (ups > 0) UI.toast(`🧭 Expeditions-Level ${e.level}! Neue Slots könnten freigeschaltet sein.`, "good");
   },
 
-  /* Reward skaliert mit Rang (exponentiell, wie fuseCost) und Laufzeit-Multiplikator */
+  /* Reward skaliert mit Rang (exponentiell) und Laufzeit-Multiplikator */
   expeditionReward(rarity, durMult) {
     const order = DATA.rarities[rarity].order;
     const gold = Math.round(2000 * Math.pow(1.8, order) * durMult);
@@ -643,27 +654,38 @@ const Game = {
     UI.render();
   },
 
-  expeditionReady(slotIdx) {
+  expeditionCompletedCycles(slotIdx) {
     const slot = Game.state.expedition.slots[slotIdx];
-    if (!slot) return false;
-    return Date.now() - slot.startTime >= slot.durationMs;
+    if (!slot) return 0;
+    return Math.floor((Date.now() - slot.startTime) / slot.durationMs);
+  },
+
+  expeditionReady(slotIdx) {
+    return Game.expeditionCompletedCycles(slotIdx) > 0;
   },
 
   expeditionClaim(slotIdx) {
     const s = Game.state;
     const slot = s.expedition.slots[slotIdx];
-    if (!slot || !Game.expeditionReady(slotIdx)) { UI.toast("Expedition noch nicht abgeschlossen!", "bad"); return; }
-    const r = Game.expeditionReward(slot.rarity, slot.durMult);
-    s.gold += r.gold;
-    Game.addPlayerExp(r.playerXp);
-    Game.addExpeditionExp(r.expXp);
-    let msg = `🧭 ${slot.name} zurück: +${r.gold.toLocaleString("de-DE")} 💰, +${r.playerXp} ⭐`;
-    if (Math.random() < r.eggChance) {
-      s.inventory.eggs[r.eggTier] = (s.inventory.eggs[r.eggTier] || 0) + 1;
-      msg += `, +1 🥚 (${r.eggTier})`;
+    const cycles = Game.expeditionCompletedCycles(slotIdx);
+    if (!slot || cycles < 1) { UI.toast("Expedition noch nicht abgeschlossen!", "bad"); return; }
+    const r = Game.expeditionReward(slot.rarity, slot.durMult || 1);
+    const totalGold = r.gold * cycles;
+    const totalPxp  = r.playerXp * cycles;
+    const totalExXp = r.expXp * cycles;
+    s.gold += totalGold;
+    s.goldEarned = (s.goldEarned || 0) + totalGold;
+    Game.addPlayerExp(totalPxp);
+    Game.addExpeditionExp(totalExXp);
+    let eggs = 0;
+    for (let c = 0; c < cycles; c++) {
+      if (Math.random() < r.eggChance) { s.inventory.eggs[r.eggTier] = (s.inventory.eggs[r.eggTier] || 0) + 1; eggs++; }
     }
+    const pre = cycles > 1 ? `${cycles}× ` : "";
+    let msg = `🧭 ${slot.name}: ${pre}+${totalGold.toLocaleString("de-DE")} 💰, +${totalPxp} ⭐`;
+    if (eggs > 0) msg += `, +${eggs} 🥚`;
     UI.toast(msg, "good");
-    s.expedition.slots[slotIdx] = null;
+    slot.startTime += cycles * slot.durationMs; // Slot läuft weiter, Restzeit bleibt erhalten
     UI.updateTopbar();
     UI.render();
   },
