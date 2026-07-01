@@ -433,9 +433,11 @@ body {
 .fusion-reveal { text-align: center; }
 .fz-stage { position: relative; height: 120px; display: flex; align-items: center; justify-content: center; }
 .fz-mon {
-  position: absolute; font-size: 54px; line-height: 1;
+  position: absolute; width: 0; height: 0; line-height: 1;
   filter: drop-shadow(0 0 10px var(--rcolor, #7c5cff));
 }
+/* Einzelnes Monster innerhalb der Formation (kreisförmig um den Gruppen-Mittelpunkt) */
+.fz-gm { position: absolute; transform: translate(-50%, -50%); line-height: 1; }
 .fz-left  { animation: fzSmashL 1s ease forwards; }
 .fz-right { animation: fzSmashR 1s ease forwards; }
 /* Kurz stehen (mit Mini-Anlauf nach hinten), dann ruckartig zusammenstoßen */
