@@ -83,7 +83,11 @@ const Game = {
       for (const m of Game.MINES) {
         if (!Game.state.mines[m.id]) Game.state.mines[m.id] = { owned: false, lastCollect: 0 };
       }
-      if (Game.state.inventory.eggs.goettlich == null) Game.state.inventory.eggs.goettlich = 0;
+      // goettlich-Eier → divine-Eier migrieren (Minen/Expedition hatten falsche ID)
+      if (Game.state.inventory.eggs.goettlich) {
+        Game.state.inventory.eggs.divine = (Game.state.inventory.eggs.divine || 0) + Game.state.inventory.eggs.goettlich;
+        delete Game.state.inventory.eggs.goettlich;
+      }
       // Expeditions-Migration: fehlendes Feld initialisieren
       if (!Game.state.expedition) Game.state.expedition = { level: 1, exp: 0, slots: [null, null, null] };
       if (!Game.state.expedition.slots) Game.state.expedition.slots = [null, null, null];
@@ -544,7 +548,7 @@ const Game = {
   MINES: [
     { id: "standard",  name: "Standard-Mine", emoji: "⛏️",  cost: 10_000,      cooldown: 10 * 60 * 1000, reward: { type: "egg",     id: "standard",  label: "Standard-Ei",  emoji: "🥚" }, color: "#9aa4bf" },
     { id: "elite",     name: "Elite-Mine",     emoji: "🔮",  cost: 100_000,     cooldown: 15 * 60 * 1000, reward: { type: "egg",     id: "elite",     label: "Elite-Ei",     emoji: "🥚" }, color: "#4aa8ff" },
-    { id: "goettlich", name: "Götter-Mine",    emoji: "🌟",  cost: 500_000,     cooldown: 60 * 60 * 1000, reward: { type: "egg",     id: "goettlich", label: "Göttlich-Ei",  emoji: "🥚" }, color: "#ffe7a0" },
+    { id: "goettlich", name: "Götter-Mine",    emoji: "🌟",  cost: 500_000,     cooldown: 60 * 60 * 1000, reward: { type: "egg",     id: "divine",    label: "Göttlich-Ei",  emoji: "🥚" }, color: "#ffe7a0" },
     { id: "crystal",   name: "Kristall-Mine",  emoji: "💎",  cost: 1_000_000,   cooldown: 60 * 60 * 1000, reward: { type: "crystal",                  label: "Kristall",     emoji: "💎" }, color: "#00d3a7" },
   ],
 
@@ -626,7 +630,7 @@ const Game = {
     const playerXp = Math.round(15 * Math.pow(1.5, order) * durMult);
     const expXp = Math.round(25 * durMult);
     const eggChance = Math.min(0.95, 0.18 * durMult);
-    const eggTier = order >= 10 ? "goettlich" : order >= 3 ? "elite" : "standard";
+    const eggTier = order >= 10 ? "divine" : order >= 3 ? "elite" : "standard";
     return { gold, playerXp, expXp, eggChance, eggTier };
   },
 
@@ -667,27 +671,19 @@ const Game = {
   expeditionClaim(slotIdx) {
     const s = Game.state;
     const slot = s.expedition.slots[slotIdx];
-    const cycles = Game.expeditionCompletedCycles(slotIdx);
-    if (!slot || cycles < 1) { UI.toast("Expedition noch nicht abgeschlossen!", "bad"); return; }
+    if (!slot || !Game.expeditionReady(slotIdx)) { UI.toast("Expedition noch nicht abgeschlossen!", "bad"); return; }
     const r = Game.expeditionReward(slot.rarity, slot.durMult || 1);
-    const totalGold = r.gold * cycles;
-    const totalPxp  = r.playerXp * cycles;
-    const totalExXp = r.expXp * cycles;
-    s.gold += totalGold;
-    s.goldEarned = (s.goldEarned || 0) + totalGold;
-    Game.addPlayerExp(totalPxp);
-    Game.addExpeditionExp(totalExXp);
-    let eggs = 0;
-    for (let c = 0; c < cycles; c++) {
-      if (Math.random() < r.eggChance) { s.inventory.eggs[r.eggTier] = (s.inventory.eggs[r.eggTier] || 0) + 1; eggs++; }
-    }
-    const pre = cycles > 1 ? `${cycles}× ` : "";
-    let msg = `🧭 ${slot.name}: ${pre}+${totalGold.toLocaleString("de-DE")} 💰, +${totalPxp} ⭐`;
-    if (eggs > 0) msg += `, +${eggs} 🥚`;
-    UI.toast(msg, "good");
-    slot.startTime += cycles * slot.durationMs; // Slot läuft weiter, Restzeit bleibt erhalten
+    s.gold += r.gold;
+    s.goldEarned = (s.goldEarned || 0) + r.gold;
+    Game.addPlayerExp(r.playerXp);
+    Game.addExpeditionExp(r.expXp);
+    let eggCount = 0;
+    if (Math.random() < r.eggChance) { s.inventory.eggs[r.eggTier] = (s.inventory.eggs[r.eggTier] || 0) + 1; eggCount++; }
+    const claimedSlot = { ...slot };
+    s.expedition.slots[slotIdx] = null;
     UI.updateTopbar();
     UI.render();
+    UI.showExpeditionClaimModal(claimedSlot, r, eggCount);
   },
 
   expeditionRecall(slotIdx) {

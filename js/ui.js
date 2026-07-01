@@ -445,21 +445,19 @@ const UI = {
   /* ---- Expedition ---- */
   _expCd(slotIdx) {
     const slot = Game.state.expedition.slots[slotIdx];
-    if (!slot) return { ready: false, pct: 0, text: "—", cycles: 0 };
-    const elapsed   = Date.now() - slot.startTime;
-    const total     = slot.durationMs;
-    const cycles    = Math.floor(elapsed / total);
-    const cycleElapsed = elapsed % total;
-    const pct       = Math.min(100, (cycleElapsed / total) * 100);
-    const ready     = cycles > 0;
-    const remaining = total - cycleElapsed;
-    const h  = Math.floor(remaining / 3600000);
-    const mm = Math.floor((remaining % 3600000) / 60000);
+    if (!slot) return { ready: false, pct: 0, text: "—" };
+    const elapsed = Date.now() - slot.startTime;
+    const total   = slot.durationMs;
+    const ready   = elapsed >= total;
+    if (ready) return { ready: true, pct: 100, text: "Bereit!" };
+    const remaining = total - elapsed;
+    const h   = Math.floor(remaining / 3600000);
+    const mm  = Math.floor((remaining % 3600000) / 60000);
     const sec = Math.floor((remaining % 60000) / 1000);
     const text = h > 0
       ? `${h}:${String(mm).padStart(2,"0")}:${String(sec).padStart(2,"0")}`
       : `${mm}:${String(sec).padStart(2,"0")}`;
-    return { ready, pct, text, cycles };
+    return { ready: false, pct: Math.min(99, (elapsed / total) * 100), text };
   },
 
   _startExpeditionTimer() {
@@ -478,13 +476,8 @@ const UI = {
         if (fill) fill.style.width = cd.pct + "%";
         if (btn) {
           btn.disabled = !cd.ready;
-          btn.textContent = cd.ready ? `🎁 ${cd.cycles > 1 ? cd.cycles + "× " : ""}Abholen` : "⏳ Unterwegs";
+          btn.textContent = cd.ready ? "🎁 Abholen" : "⏳ Unterwegs";
           btn.className = `btn ${cd.ready ? "good" : "ghost"} mc-collect-btn`;
-        }
-        const cyclesEl = document.getElementById(`exp-cycles-${i}`);
-        if (cyclesEl) {
-          cyclesEl.textContent = cd.cycles > 0 ? `${cd.cycles}× bereit` : "läuft…";
-          cyclesEl.className = `mc-sub exp-cycles-badge ${cd.cycles > 0 ? "exp-cycles-ready" : ""}`;
         }
       }
       if (!anyVisible) { clearInterval(UI._expTimer); UI._expTimer = null; }
@@ -535,14 +528,10 @@ const UI = {
             <div class="mc-bar"><div class="mc-fill" id="exp-fill-${i}" style="width:${cd.pct}%;background:${rc}"></div></div>
             <span class="mc-timer mine-countdown ${cd.ready ? "mine-cd-ready" : ""}" id="exp-cd-${i}">${cd.text}</span>
           </div>
-          <div class="kv" style="padding:3px 0;border:none">
-            <span class="mc-sub">Nächster Zyklus</span>
-            <span class="mc-sub exp-cycles-badge ${cd.cycles > 0 ? "exp-cycles-ready" : ""}" id="exp-cycles-${i}">${cd.cycles > 0 ? `${cd.cycles}× bereit` : "läuft…"}</span>
-          </div>
           <div class="btn-row" style="margin-top:6px">
             <button class="btn ${cd.ready ? "good" : "ghost"} mc-collect-btn" id="exp-btn-${i}"
                     onclick="Game.expeditionClaim(${i})" ${cd.ready ? "" : "disabled"}>
-              ${cd.ready ? `🎁 ${cd.cycles > 1 ? cd.cycles + "× " : ""}Abholen` : "⏳ Unterwegs"}
+              ${cd.ready ? "🎁 Abholen" : "⏳ Unterwegs"}
             </button>
             <button class="btn bad sm" onclick="Game.expeditionRecall(${i})" title="Zurückrufen (kein Reward)">✕</button>
           </div>`;
@@ -611,6 +600,29 @@ const UI = {
       <div class="mmeta" style="margin-bottom:14px;color:${rc}">${DATA.rarities[entry.rarity].name} — Laufzeit wählen</div>
       ${opts}
       <button class="btn ghost" style="margin-top:8px" onclick="UI.closeModal()">Abbrechen</button>
+    `);
+  },
+
+  showExpeditionClaimModal(slot, r, eggCount) {
+    const rc = UI.rarColor(slot.rarity);
+    const eggType = DATA.eggTypes.find(e => e.id === r.eggTier);
+    const eggLine = eggCount > 0
+      ? `<div class="exp-claim-row"><span class="exp-claim-icon">${eggType ? eggType.emoji : "🥚"}</span><span class="exp-claim-label">${eggType ? eggType.name : "Ei"}</span><span class="exp-claim-val good-text">+${eggCount}</span></div>`
+      : "";
+    UI.modal(`
+      <div style="text-align:center;margin-bottom:14px">
+        <div style="font-size:42px">${slot.emoji}</div>
+        <div style="font-weight:800;font-size:15px;margin-top:4px">${slot.name}</div>
+        <div style="font-size:12px;color:${rc};font-weight:700">${DATA.rarities[slot.rarity].name}</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Belohnung</div>
+      <div class="exp-claim-rows">
+        <div class="exp-claim-row"><span class="exp-claim-icon">💰</span><span class="exp-claim-label">Gold</span><span class="exp-claim-val good-text">+${r.gold.toLocaleString("de-DE")}</span></div>
+        <div class="exp-claim-row"><span class="exp-claim-icon">⭐</span><span class="exp-claim-label">Spieler-EP</span><span class="exp-claim-val good-text">+${r.playerXp}</span></div>
+        <div class="exp-claim-row"><span class="exp-claim-icon">🧭</span><span class="exp-claim-label">Expeditions-EP</span><span class="exp-claim-val good-text">+${r.expXp}</span></div>
+        ${eggLine}
+      </div>
+      <button class="btn good" style="margin-top:16px;width:100%" onclick="UI.closeModal()">Super! 🎉</button>
     `);
   },
 
