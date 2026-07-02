@@ -42,6 +42,45 @@ const Save = {
     return !!localStorage.getItem(Save.KEY);
   },
 
+  /* ---- Export/Import als Code: "IMW1.<base64>.<prüfsumme>" ----
+     Base64 UTF-8-sicher (Monsternamen enthalten Emojis), Prüfsumme erkennt
+     unvollständig kopierte Codes. */
+  _checksum(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  },
+
+  exportString() {
+    Game.state.lastSaveTime = Date.now();
+    const bytes = new TextEncoder().encode(JSON.stringify(Game.state));
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    const b64 = btoa(bin);
+    return `IMW1.${b64}.${Save._checksum(b64)}`;
+  },
+
+  importString(code) {
+    try {
+      const parts = String(code).trim().split(".");
+      if (parts.length !== 3 || parts[0] !== "IMW1")
+        return { ok: false, error: "Ungültiges Format — Code muss mit IMW1. beginnen." };
+      const [, b64, sum] = parts;
+      if (Save._checksum(b64) !== sum)
+        return { ok: false, error: "Prüfsumme falsch — Code unvollständig kopiert?" };
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const data = JSON.parse(new TextDecoder().decode(bytes));
+      if (!data || typeof data !== "object" || !Array.isArray(data.collection) || typeof data.gold !== "number")
+        return { ok: false, error: "Code enthält keinen gültigen Spielstand." };
+      localStorage.setItem(Save.KEY, JSON.stringify(data));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: "Code konnte nicht gelesen werden." };
+    }
+  },
+
   resetGame() {
     localStorage.removeItem(Save.KEY);
   },

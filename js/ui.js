@@ -1572,12 +1572,64 @@ const UI = {
           <button class="btn" onclick="Game.manualSave()">💾 Jetzt speichern</button>
         </div>
         <div class="btn-row">
+          <button class="btn" onclick="UI.openExportModal()">📤 Exportieren</button>
+          <button class="btn" onclick="UI.openImportModal()">📥 Importieren</button>
+        </div>
+        <div class="btn-row">
           <button class="btn ghost" onclick="UI.showTutorial()">📖 Tutorial anzeigen</button>
         </div>
         <div class="btn-row">
           <button class="btn bad" onclick="Game.askReset()">🗑️ Spielstand löschen</button>
         </div>
       </div>`;
+  },
+
+  /* ---- Spielstand Export/Import (Settings) ---- */
+  openExportModal() {
+    const code = Save.exportString();
+    UI.modal(`
+      <h3 style="margin:0 0 8px;font-size:16px">📤 Spielstand exportieren</h3>
+      <p style="font-size:12px">Kopiere diesen Code und füge ihn auf dem anderen Gerät unter „Importieren“ ein.</p>
+      <textarea id="save-code-out" class="save-code-area" readonly onclick="this.select()">${code}</textarea>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn good" onclick="UI.copySaveCode()">📋 Kopieren</button>
+        <button class="btn ghost" onclick="UI.closeModal()">Schließen</button>
+      </div>
+    `);
+  },
+
+  copySaveCode() {
+    const ta = document.getElementById("save-code-out");
+    if (!ta) return;
+    ta.select();
+    const done = () => UI.toast("📋 Code kopiert!", "good");
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(ta.value).then(done, () => { document.execCommand("copy"); done(); });
+    } else {
+      document.execCommand("copy"); done();
+    }
+  },
+
+  openImportModal() {
+    UI.modal(`
+      <h3 style="margin:0 0 8px;font-size:16px">📥 Spielstand importieren</h3>
+      <p style="font-size:12px;color:var(--bad)">⚠️ Der aktuelle Spielstand auf diesem Gerät wird überschrieben!</p>
+      <textarea id="save-code-in" class="save-code-area" placeholder="IMW1.…"></textarea>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn bad" onclick="UI.doImportSave()">📥 Importieren</button>
+        <button class="btn ghost" onclick="UI.closeModal()">Abbrechen</button>
+      </div>
+    `);
+  },
+
+  doImportSave() {
+    const ta = document.getElementById("save-code-in");
+    const res = Save.importString(ta ? ta.value : "");
+    if (!res.ok) { UI.toast(res.error, "bad"); return; }
+    // Autosave stilllegen, damit der alte Stand den Import nicht überschreibt, dann neu laden
+    Save.saveGame = () => true;
+    UI.toast("✅ Spielstand importiert — lade neu…", "good");
+    setTimeout(() => location.reload(), 500);
   },
 
   /* ---- Beschwörungs-Ergebnis ---- */
