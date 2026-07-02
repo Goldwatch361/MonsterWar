@@ -652,11 +652,13 @@ const Game = {
     if (ups > 0) Events.emit("toast",`🧭 Expeditions-Level ${e.level}! Neue Slots könnten freigeschaltet sein.`, "good");
   },
 
-  /* Reward skaliert mit Rang (exponentiell) und Laufzeit-Multiplikator */
+  /* Reward skaliert mit Rang (exponentiell) und Laufzeit-Multiplikator.
+     Gold-Wachstum 2.5/Rang = gleiche Rate wie fuseCost, damit höhere Ränge
+     proportional zur Spieler-Ökonomie lohnend bleiben. */
   expeditionReward(rarity, durMult) {
     const order = DATA.rarities[rarity].order;
-    const gold = Math.round(2000 * Math.pow(1.8, order) * durMult);
-    const playerXp = Math.round(15 * Math.pow(1.5, order) * durMult);
+    const gold = Math.round(2000 * Math.pow(2.5, order) * durMult);
+    const playerXp = Math.round(15 * Math.pow(1.7, order) * durMult);
     const expXp = Math.round(25 * durMult);
     const eggChance = Math.min(0.95, 0.18 * durMult);
     const eggTier = order >= 10 ? "divine" : order >= 3 ? "elite" : "standard";

@@ -85,7 +85,7 @@ const Battle = {
     // Logarithmische Kurve: schnelles frühes Wachstum, das sich bei hohen Leveln abflacht
     const bt = DATA.battleTuning;
     const logLv = Math.log(lv + 1);
-    let hp     = Math.round(DATA.enemyBase.hp     * lv * (bt.enemyHpBase + bt.enemyHpLogMult * logLv));
+    let hp     = Math.round(DATA.enemyBase.hp     * Math.pow(lv, bt.enemyHpExp) * (bt.enemyHpBase + bt.enemyHpLogMult * logLv));
     let attack = Math.round(DATA.enemyBase.attack * Math.pow(lv, bt.enemyAtkExp) * (1.0 + bt.enemyAtkLogMult * logLv));
     let reward = Math.round(DATA.enemyBase.reward * Math.pow(lv, bt.rewardExp));
     if (isBoss) { hp = Math.round(hp * bt.bossHpMult); attack = Math.round(attack * bt.bossAtkMult); reward = Math.round(reward * bt.bossRewardMult); }
@@ -173,10 +173,10 @@ const Battle = {
     const cfg = DATA.worldBoss;
     const lv = s.worldBoss.level;
 
-    // Belohnungen (deutlich höher als normale Stages)
-    const gold = Math.round(cfg.goldBase * Math.pow(lv, cfg.goldLevelPow));
-    const eggs = 1 + Math.floor(lv / 3);
-    const crystals = 5 + lv * 2;
+    // Belohnungen wachsen exponentiell mit — der Boss wird pro Stufe 2.5× stärker
+    const gold = Math.round(cfg.goldBase * Math.pow(cfg.goldGrowth, lv - 1));
+    const eggs = 1 + Math.floor(lv / 2);
+    const crystals = 5 * lv;
     s.gold += gold; s.goldEarned = (s.goldEarned || 0) + gold;
     // Eier nach WB-Level verteilen
     const eligible = DATA.eggTypes.filter(et => et.dropMinLevel != null && lv >= et.dropMinLevel);

@@ -178,7 +178,7 @@ DATA.worldBoss = {
   names: ["Weltenfresser", "Titanwurm", "Höllenkoloss", "Urdrache", "Leviathan", "Sternenbestie"],
   baseHp: 8000000, hpGrowth: 2.5,
   dmgPct: 0.10,
-  goldBase: 1000, goldLevelPow: 1.5,
+  goldBase: 5000, goldGrowth: 2.2, // gold = goldBase * goldGrowth^(lv-1) — exponentiell wie die Boss-HP
 };
 
 /* Gegner-Pool nach Level-Band. Basiswerte werden mit der Formel skaliert. */
@@ -214,8 +214,9 @@ DATA.enemyBase = { hp: 80, attack: 4, reward: 5 };
 DATA.battleTuning = {
   varianceMin: 0.85, varianceRange: 0.30,   // Schadens-Varianz: 0.85–1.15×
   defenseConstant: 0.6,                     // defReduction = def / (def + atk * K) — je kleiner, desto länger bleibt Verteidigung relevant
-  enemyHpBase: 0.8, enemyHpLogMult: 0.8,    // hp = base * lv * (enemyHpBase + enemyHpLogMult * ln(lv+1))
-  enemyAtkExp: 0.75, enemyAtkLogMult: 0.5,  // attack = base * lv^enemyAtkExp * (1 + enemyAtkLogMult * ln(lv+1))
+  enemyHpExp: 1.2,                          // hp = base * lv^enemyHpExp * (enemyHpBase + enemyHpLogMult * ln(lv+1))
+  enemyHpBase: 0.8, enemyHpLogMult: 0.8,
+  enemyAtkExp: 0.65, enemyAtkLogMult: 0.45, // attack = base * lv^enemyAtkExp * (1 + enemyAtkLogMult * ln(lv+1))
   rewardExp: 1.1,                           // reward = base * lv^rewardExp
   bossHpMult: 2.5, bossAtkMult: 1.2, bossRewardMult: 3.0,
 };
