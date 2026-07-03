@@ -1,14 +1,14 @@
 /* ===== monster.js — Monster-Erzeugung, Stats, Fusion (ohne Level/Attacken) ===== */
 const Monster = {
-  /* Stats = Basiswerte × Seltenheit (× 3.5 wenn fusioniert). Kein Level mehr. */
+  /* Stats = Basiswerte × statGrowth^Rang-Order. Kein Level mehr.
+     Das fused-Flag beeinflusst nur noch Namen/Optik, nicht die Stats. */
   recalc(m, keepRatio = true) {
-    const rarityMult = DATA.rarities[m.rarity].mult;
-    const fusedMult = m.fused ? 3.5 : 1;
+    const mult = Math.pow(DATA.statGrowth, DATA.rarities[m.rarity].order);
     const ratio = (keepRatio && m.maxHp) ? Math.min(1, m.hp / m.maxHp) : 1;
 
-    m.maxHp   = Math.round(m.baseHp      * rarityMult * fusedMult);
-    m.attack  = Math.round(m.baseAttack  * rarityMult * fusedMult);
-    m.defense = Math.round(m.baseDefense * rarityMult * fusedMult);
+    m.maxHp   = Math.round(m.baseHp      * mult);
+    m.attack  = Math.round(m.baseAttack  * mult);
+    m.defense = Math.round(m.baseDefense * mult);
 
     m.hp = keepRatio ? Math.max(1, Math.round(m.maxHp * ratio)) : m.maxHp;
     return m;

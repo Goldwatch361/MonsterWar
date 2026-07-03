@@ -82,12 +82,13 @@ const Battle = {
     const els = Object.keys(DATA.elements);
     const element = els[Math.floor(Math.random() * els.length)];
 
-    // Logarithmische Kurve: schnelles frühes Wachstum, das sich bei hohen Leveln abflacht
+    // Poly-Anteil formt das Early-Game, levelGrowth^lv trägt das Langzeit-Wachstum
+    // synchron zur Monster-Stat-Kurve (×1,85 pro 1000 Level = pro Rang-Band à 200 Stages).
     const bt = DATA.battleTuning;
-    const logLv = Math.log(lv + 1);
-    let hp     = Math.round(DATA.enemyBase.hp     * Math.pow(lv, bt.enemyHpExp) * (bt.enemyHpBase + bt.enemyHpLogMult * logLv));
-    let attack = Math.round(DATA.enemyBase.attack * Math.pow(lv, bt.enemyAtkExp) * (1.0 + bt.enemyAtkLogMult * logLv));
-    let reward = Math.round(DATA.enemyBase.reward * Math.pow(lv, bt.rewardExp));
+    const growth = Math.pow(bt.levelGrowth, lv);
+    let hp     = Math.round(bt.enemyHpBase  * Math.pow(lv, bt.enemyHpPoly)  * growth);
+    let attack = Math.round(bt.enemyAtkBase * Math.pow(lv, bt.enemyAtkPoly) * growth);
+    let reward = Math.round(bt.rewardBase   * Math.pow(lv, bt.rewardPoly)   * growth);
     if (isBoss) { hp = Math.round(hp * bt.bossHpMult); attack = Math.round(attack * bt.bossAtkMult); reward = Math.round(reward * bt.bossRewardMult); }
 
     s.enemy = {
@@ -173,10 +174,10 @@ const Battle = {
     const cfg = DATA.worldBoss;
     const lv = s.worldBoss.level;
 
-    // Belohnungen wachsen exponentiell mit — der Boss wird pro Stufe 2.5× stärker
+    // Belohnungen wachsen exponentiell mit — der Boss wird pro Stufe 1.85× stärker
     const gold = Math.round(cfg.goldBase * Math.pow(cfg.goldGrowth, lv - 1));
     const eggs = 1 + Math.floor(lv / 2);
-    const crystals = 5 * lv;
+    const crystals = 10 * lv;
     s.gold += gold; s.goldEarned = (s.goldEarned || 0) + gold;
     // Eier nach WB-Level verteilen
     const eligible = DATA.eggTypes.filter(et => et.dropMinLevel != null && lv >= et.dropMinLevel);
@@ -330,8 +331,8 @@ const Battle = {
     s.gold += e.reward;
     s.goldEarned = (s.goldEarned || 0) + e.reward;
 
-    // Spieler-Erfahrung: fix 5 pro normalen Kill, 10 für Stage-Boss
-    const xp = e.isBoss ? 10 : 5;
+    // Spieler-Erfahrung: skaliert mit Gegner-Level (Boss ×2) — Master-Takt der Ei-Freischaltungen
+    const xp = Math.round((1 + 0.04 * e.level) * (e.isBoss ? 2 : 1));
     s.xpEarned = (s.xpEarned || 0) + xp;
     s.kills = (s.kills || 0) + 1;
     Game.addPlayerExp(xp);

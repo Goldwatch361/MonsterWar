@@ -1328,15 +1328,15 @@ const UI = {
   },
   toggleCollRank(rarity) { UI.collOpen[rarity] = UI.collOpen[rarity] === false; UI.render(); },
 
-  /* Eine Monster-Form berechnen: Vorlage bei einem bestimmten Rang (base = nicht fusioniert,
-     höhere Ränge = fusioniert ×3.5). Gibt null zurück, wenn der Rang unter dem Basis-Rang liegt. */
+  /* Eine Monster-Form berechnen: Vorlage bei einem bestimmten Rang.
+     Gibt null zurück, wenn der Rang unter dem Basis-Rang liegt. */
   dexForm(id, rarity) {
     const t = DATA.templates[id];
     const baseOrder = DATA.rarities[t.rarity].order;
     const order = DATA.rarities[rarity].order;
     if (order < baseOrder) return null;
     const aboveNormal = order > 0;
-    const mult = DATA.rarities[rarity].mult * (aboveNormal ? 3.5 : 1);
+    const mult = Math.pow(DATA.statGrowth, order);
     const title = aboveNormal ? (DATA.rarityTitles[rarity] || "") : "";
     return {
       id, rarity, fused: aboveNormal,

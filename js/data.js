@@ -11,30 +11,32 @@ DATA.elements = {
   schatten: { name: "Schatten", icon: "🌑", color: "var(--el-schatten)", strong: "licht" },
 };
 
-/* Seltenheiten: Stat-Multiplikator + Farbe (20 Ränge; jeder ≥ 3× der vorherige → jede Fusion mindestens doppelt so stark)
-   Formel: Normal=1, dann abwechselnd ×3 und ×3.33 → 1, 3, 10, 30, 100, 300 … 3 000 000 000
-   Höchster Rang (Unaussprechlich) fused = Basis × 3 000 000 000 × 3.5 → dreistellige Milliarden ✓ */
+/* Stat-Wachstum pro Rang: stat = basis × statGrowth^order (siehe Monster.recalc).
+   1,85 → Unaussprechlich (Order 19) = ×119.196 gegenüber Normal. */
+DATA.statGrowth = 1.85;
+
+/* Seltenheiten: Name + Farbe + Rang-Order (20 Ränge). */
 DATA.rarities = {
-  normal:          { name: "Normal",          mult:                1, color: "var(--r-normal)",          order:  0 },
-  selten:          { name: "Selten",          mult:                3, color: "var(--r-selten)",          order:  1 },
-  episch:          { name: "Episch",          mult:               10, color: "var(--r-episch)",          order:  2 },
-  legendaer:       { name: "Legendär",        mult:               30, color: "var(--r-legendaer)",       order:  3 },
-  mythisch:        { name: "Mythisch",        mult:              100, color: "var(--r-mythisch)",        order:  4 },
-  goettlich:       { name: "Göttlich",        mult:              300, color: "var(--r-goettlich)",       order:  5 },
-  uralt:           { name: "Uralt",           mult:            1_000, color: "var(--r-uralt)",           order:  6 },
-  kosmisch:        { name: "Kosmisch",        mult:            3_000, color: "var(--r-kosmisch)",        order:  7 },
-  titanisch:       { name: "Titanisch",       mult:           10_000, color: "var(--r-titanisch)",       order:  8 },
-  transzendent:    { name: "Transzendent",    mult:           30_000, color: "var(--r-transzendent)",    order:  9 },
-  erhaben:         { name: "Erhaben",         mult:          100_000, color: "var(--r-erhaben)",         order: 10 },
-  archaisch:       { name: "Archaisch",       mult:          300_000, color: "var(--r-archaisch)",       order: 11 },
-  abyssal:         { name: "Abyssal",         mult:        1_000_000, color: "var(--r-abyssal)",         order: 12 },
-  primordial:      { name: "Primordial",      mult:        3_000_000, color: "var(--r-primordial)",      order: 13 },
-  weltgeist:       { name: "Weltgeist",       mult:       10_000_000, color: "var(--r-weltgeist)",       order: 14 },
-  schoepfer:       { name: "Schöpfer",        mult:       30_000_000, color: "var(--r-schoepfer)",       order: 15 },
-  goettervater:    { name: "Göttervater",     mult:      100_000_000, color: "var(--r-goettervater)",    order: 16 },
-  absolut:         { name: "Absolut",         mult:      300_000_000, color: "var(--r-absolut)",         order: 17 },
-  jenseitig:       { name: "Jenseitig",       mult:    1_000_000_000, color: "var(--r-jenseitig)",       order: 18 },
-  unaussprechlich: { name: "Unaussprechlich", mult:    3_000_000_000, color: "var(--r-unaussprechlich)", order: 19 },
+  normal:          { name: "Normal",          color: "var(--r-normal)",          order:  0 },
+  selten:          { name: "Selten",          color: "var(--r-selten)",          order:  1 },
+  episch:          { name: "Episch",          color: "var(--r-episch)",          order:  2 },
+  legendaer:       { name: "Legendär",        color: "var(--r-legendaer)",       order:  3 },
+  mythisch:        { name: "Mythisch",        color: "var(--r-mythisch)",        order:  4 },
+  goettlich:       { name: "Göttlich",        color: "var(--r-goettlich)",       order:  5 },
+  uralt:           { name: "Uralt",           color: "var(--r-uralt)",           order:  6 },
+  kosmisch:        { name: "Kosmisch",        color: "var(--r-kosmisch)",        order:  7 },
+  titanisch:       { name: "Titanisch",       color: "var(--r-titanisch)",       order:  8 },
+  transzendent:    { name: "Transzendent",    color: "var(--r-transzendent)",    order:  9 },
+  erhaben:         { name: "Erhaben",         color: "var(--r-erhaben)",         order: 10 },
+  archaisch:       { name: "Archaisch",       color: "var(--r-archaisch)",       order: 11 },
+  abyssal:         { name: "Abyssal",         color: "var(--r-abyssal)",         order: 12 },
+  primordial:      { name: "Primordial",      color: "var(--r-primordial)",      order: 13 },
+  weltgeist:       { name: "Weltgeist",       color: "var(--r-weltgeist)",       order: 14 },
+  schoepfer:       { name: "Schöpfer",        color: "var(--r-schoepfer)",       order: 15 },
+  goettervater:    { name: "Göttervater",     color: "var(--r-goettervater)",    order: 16 },
+  absolut:         { name: "Absolut",         color: "var(--r-absolut)",         order: 17 },
+  jenseitig:       { name: "Jenseitig",       color: "var(--r-jenseitig)",       order: 18 },
+  unaussprechlich: { name: "Unaussprechlich", color: "var(--r-unaussprechlich)", order: 19 },
 };
 /* Reihenfolge der Ränge (für Fusion-Aufstieg) */
 DATA.rarityOrder = [
@@ -120,7 +122,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "divine", name: "Göttlich-Ei", emoji: "👼", currency: "gold", cost: 80000, minLevel: 30,
+    id: "divine", name: "Göttlich-Ei", emoji: "👼", currency: "gold", cost: 25000, minLevel: 35,
     dropMinLevel: 50, dropWeight: 2,
     table: [
       { rarity: "mythisch", chance: 0.55 }, { rarity: "goettlich", chance: 0.35 },
@@ -128,7 +130,7 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "cosmic", name: "Kosmisch-Ei", emoji: "🪐", currency: "crystals", cost: 500, minLevel: 45,
+    id: "cosmic", name: "Kosmisch-Ei", emoji: "🪐", currency: "crystals", cost: 500, minLevel: 50,
     dropMinLevel: 65, dropWeight: 1,
     table: [
       { rarity: "goettlich", chance: 0.50 }, { rarity: "uralt", chance: 0.35 },
@@ -136,12 +138,12 @@ DATA.eggTypes = [
     ],
   },
   {
-    id: "transcend", name: "Transzendenz-Ei", emoji: "🌠", currency: "gold", cost: 1500000, minLevel: 60,
+    id: "transcend", name: "Transzendenz-Ei", emoji: "🌠", currency: "gold", cost: 300000, minLevel: 70,
     dropMinLevel: 85, dropWeight: 1,
     table: [
-      { rarity: "uralt", chance: 0.40 }, { rarity: "kosmisch", chance: 0.30 },
-      { rarity: "titanisch", chance: 0.20 }, { rarity: "transzendent", chance: 0.08 },
-      { rarity: "erhaben", chance: 0.02 },
+      { rarity: "uralt", chance: 0.35 }, { rarity: "kosmisch", chance: 0.30 },
+      { rarity: "titanisch", chance: 0.20 }, { rarity: "transzendent", chance: 0.10 },
+      { rarity: "erhaben", chance: 0.04 }, { rarity: "archaisch", chance: 0.01 },
     ],
   },
 ];
@@ -176,9 +178,9 @@ DATA.summonCost = 100;
 DATA.worldBoss = {
   emojis: ["🌌", "🐲", "👹", "🦏", "🦖", "🐙"],
   names: ["Weltenfresser", "Titanwurm", "Höllenkoloss", "Urdrache", "Leviathan", "Sternenbestie"],
-  baseHp: 8000000, hpGrowth: 2.5,
+  baseHp: 150000, hpGrowth: 1.85, // hp = baseHp * hpGrowth^(lv-5) — wächst im Takt der Spielerstärke (statGrowth)
   dmgPct: 0.10,
-  goldBase: 5000, goldGrowth: 2.2, // gold = goldBase * goldGrowth^(lv-1) — exponentiell wie die Boss-HP
+  goldBase: 3000, goldGrowth: 1.9, // gold = goldBase * goldGrowth^(lv-1) — Ökonomie-Rate wie fuseCost
 };
 
 /* Gegner-Pool nach Level-Band. Basiswerte werden mit der Formel skaliert. */
@@ -205,19 +207,18 @@ DATA.enemyTiers = [
   ]},
 ];
 
-/* Gegner-Basiswerte (Level-1-Goblin = HP50 / Atk5 / Reward20 lt. Spec) */
-DATA.enemyBase = { hp: 80, attack: 4, reward: 5 };
-
 /* Kampf-Feintuning: alle Formel-Konstanten aus battle.js an einem Ort.
-   enemyAtkExp/enemyAtkLogMult bestimmen, wie steil der Gegner-Angriff mit dem Level wächst —
-   das ist der zentrale Hebel, um Stage-Fortschritt an die Monster-Rarität zu koppeln. */
+   Kurvenform: wert = base · lv^poly · levelGrowth^lv
+   Der Poly-Anteil formt das Early-Game, der exponentielle Anteil trägt das Langzeit-Wachstum:
+   levelGrowth = 1.85^(1/1000) → Gegner werden pro 200 Stages (= 1000 Level) um ×1,85 stärker,
+   exakt im Takt der Monster-Stat-Kurve (statGrowth pro Rang). → ~200 Stages pro Rang. */
 DATA.battleTuning = {
   varianceMin: 0.85, varianceRange: 0.30,   // Schadens-Varianz: 0.85–1.15×
-  defenseConstant: 0.6,                     // defReduction = def / (def + atk * K) — je kleiner, desto länger bleibt Verteidigung relevant
-  enemyHpExp: 1.2,                          // hp = base * lv^enemyHpExp * (enemyHpBase + enemyHpLogMult * ln(lv+1))
-  enemyHpBase: 0.8, enemyHpLogMult: 0.8,
-  enemyAtkExp: 0.65, enemyAtkLogMult: 0.45, // attack = base * lv^enemyAtkExp * (1 + enemyAtkLogMult * ln(lv+1))
-  rewardExp: 1.1,                           // reward = base * lv^rewardExp
+  defenseConstant: 0.6,                     // defReduction = def / (def + atk * K)
+  levelGrowth: Math.pow(1.85, 1 / 1000),    // ≈ 1.000616 pro Level
+  enemyHpBase: 100, enemyHpPoly: 0.3,
+  enemyAtkBase: 2,  enemyAtkPoly: 0.25,
+  rewardBase: 2,    rewardPoly: 0.35,
   bossHpMult: 2.5, bossAtkMult: 1.2, bossRewardMult: 3.0,
 };
 

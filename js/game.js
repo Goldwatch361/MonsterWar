@@ -482,10 +482,11 @@ const Game = {
     return Game.collectionGroups().reduce((s, g) => s + Math.floor(Game.availableCount(g.sample) / 2), 0);
   },
 
-  /* Gold-Kosten für eine Fusion (Ergebnis-Rang entscheidet) */
+  /* Gold-Kosten für eine Fusion (Ergebnis-Rang entscheidet).
+     Wachstum 1.9/Rang, knapp über statGrowth 1.85 → sanft steigender relativer Druck. */
   fuseCost(resultRarity) {
     const order = DATA.rarities[resultRarity].order;
-    return Math.round(500 * Math.pow(2.5, order));
+    return Math.round(800 * Math.pow(1.9, order));
   },
 
   /* Hilfsfunktion: fusionierten Eintrag in Collection eintragen (count-basiert) */
@@ -574,7 +575,7 @@ const Game = {
   MINES: [
     { id: "standard",  name: "Standard-Mine", emoji: "⛏️",  cost: 10_000,        cooldown: 10 * 60 * 1000, reward: { type: "egg",     id: "standard",  label: "Standard-Ei",  emoji: "🥚" }, color: "#9aa4bf" },
     { id: "elite",     name: "Elite-Mine",     emoji: "🔮",  cost: 1_000_000,     cooldown: 15 * 60 * 1000, reward: { type: "egg",     id: "elite",     label: "Elite-Ei",     emoji: "🥚" }, color: "#4aa8ff" },
-    { id: "crystal",   name: "Kristall-Mine",  emoji: "💎",  cost: 100_000_000,   cooldown: 60 * 60 * 1000, reward: { type: "crystal",                  label: "Kristall",     emoji: "💎" }, color: "#00d3a7" },
+    { id: "crystal",   name: "Kristall-Mine",  emoji: "💎",  cost: 100_000_000,   cooldown: 60 * 60 * 1000, reward: { type: "crystal", amount: 10,      label: "Kristall",     emoji: "💎" }, color: "#00d3a7" },
     { id: "goettlich", name: "Götter-Mine",    emoji: "🌟",  cost: 1_000_000_000, cooldown: 60 * 60 * 1000, reward: { type: "egg",     id: "divine",    label: "Göttlich-Ei",  emoji: "🥚" }, color: "#ffe7a0" },
   ],
 
@@ -606,12 +607,14 @@ const Game = {
     const elapsed = Date.now() - (s.mines[id].lastCollect || 0);
     s.mines[id].lastCollect = Date.now() - (elapsed % cfg.cooldown);
     const r = cfg.reward;
+    const perCycle = r.amount || 1;
+    const total = count * perCycle;
     if (r.type === "crystal") {
-      s.inventory.crystals = (s.inventory.crystals || 0) + count;
+      s.inventory.crystals = (s.inventory.crystals || 0) + total;
     } else {
-      s.inventory.eggs[r.id] = (s.inventory.eggs[r.id] || 0) + count;
+      s.inventory.eggs[r.id] = (s.inventory.eggs[r.id] || 0) + total;
     }
-    Events.emit("toast",`${cfg.emoji} ${count}× ${r.label} ${r.emoji} abgeholt!`, "good");
+    Events.emit("toast",`${cfg.emoji} ${total}× ${r.label} ${r.emoji} abgeholt!`, "good");
     UI.updateTopbar();
     Events.emit("render");
   },
@@ -653,15 +656,15 @@ const Game = {
   },
 
   /* Reward skaliert mit Rang (exponentiell) und Laufzeit-Multiplikator.
-     Gold-Wachstum 2.5/Rang = gleiche Rate wie fuseCost, damit höhere Ränge
+     Gold-Wachstum 1.9/Rang = gleiche Rate wie fuseCost, damit höhere Ränge
      proportional zur Spieler-Ökonomie lohnend bleiben. */
   expeditionReward(rarity, durMult) {
     const order = DATA.rarities[rarity].order;
-    const gold = Math.round(2000 * Math.pow(2.5, order) * durMult);
-    const playerXp = Math.round(15 * Math.pow(1.7, order) * durMult);
+    const gold = Math.round(500 * Math.pow(1.9, order) * durMult);
+    const playerXp = Math.round(15 * Math.pow(1.5, order) * durMult);
     const expXp = Math.round(25 * durMult);
     const eggChance = Math.min(0.95, 0.18 * durMult);
-    const eggTier = order >= 10 ? "divine" : order >= 3 ? "elite" : "standard";
+    const eggTier = order >= 14 ? "transcend" : order >= 9 ? "divine" : order >= 5 ? "elite" : "standard";
     return { gold, playerXp, expXp, eggChance, eggTier };
   },
 
