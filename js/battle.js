@@ -313,9 +313,13 @@ const Battle = {
     } else {
       let target = team.find(m => m.id === Battle.lastAttackerId && m.hp > 0);
       if (!target) target = alive[Math.floor(Math.random() * alive.length)];
-      // Echter, stage-skalierter Gegner-Angriff läuft durch die normale Verteidigungsformel —
-      // Fusion/Verteidigung muss real vor Schaden schützen, statt neutralisiert zu werden.
-      const { dmg } = Battle.calculateDamage(s.enemy, target);
+      // Echter, stage-skalierter Gegner-Angriff läuft durch die normale Verteidigungsformel.
+      // Zusätzlich ein Mindest-Schaden-Boden (% der Ziel-MaxHP), damit Farmen weit unter der
+      // Wand spürbar bleibt — an den Wänden dominiert weiterhin der reale Schaden.
+      const bt = DATA.battleTuning;
+      const real = Battle.calculateDamage(s.enemy, target).dmg;
+      const floor = s.enemy.level >= bt.enemyDmgFloorMinLevel ? Math.round(target.maxHp * bt.enemyDmgFloor) : 0;
+      const dmg = Math.max(real, floor);
       target.hp = Math.max(0, target.hp - dmg);
       Battle.fx = { type: "enemy", targetId: target.id, dmg };
       Battle.phase = "team";
