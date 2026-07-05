@@ -39,7 +39,7 @@ const Battle = {
   },
 
   /* Schadensberechnung mit Element-Vorteil + Varianz.
-     Defense = prozentualer Abzug mit Diminishing Returns (max 75 %) — verhindert
+     Defense = prozentualer Abzug mit Diminishing Returns (Kappe defenseCap) — verhindert
      dass hochrangige Monster komplett immun gegen Gegner-Schaden werden. */
   calculateDamage(attacker, defender, fixed = false) {
     if (fixed) return { dmg: attacker.attack, advantage: false };
@@ -52,7 +52,7 @@ const Battle = {
              DATA.elements[defender.element].strong === attacker.element) mod = 0.85;
     const def = defender.defense || 0;
     const atk = attacker.attack || 0;
-    const defReduction = Math.min(0.75, def / ((def + atk * bt.defenseConstant) || 1));
+    const defReduction = Math.min(bt.defenseCap, def / ((def + atk * bt.defenseConstant) || 1));
     const raw = Math.round(atk * mod * variance * (1 - defReduction));
     return { dmg: Math.max(1, raw), advantage: mod > 1 };
   },

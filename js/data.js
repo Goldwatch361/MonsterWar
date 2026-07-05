@@ -215,9 +215,10 @@ DATA.enemyTiers = [
 DATA.battleTuning = {
   varianceMin: 0.85, varianceRange: 0.30,   // Schadens-Varianz: 0.85–1.15×
   defenseConstant: 0.6,                     // defReduction = def / (def + atk * K)
+  defenseCap: 0.55,                         // max. Schadensreduktion durch Verteidigung
   levelGrowth: Math.pow(1.85, 1 / 1000),    // ≈ 1.000616 pro Level
   enemyHpBase: 100, enemyHpPoly: 0.3,
-  enemyAtkBase: 2,  enemyAtkPoly: 0.25,
+  enemyAtkBase: 1.2, enemyAtkPoly: 0.5,
   rewardBase: 2,    rewardPoly: 0.35,
   bossHpMult: 2.5, bossAtkMult: 1.2, bossRewardMult: 3.0,
 };
