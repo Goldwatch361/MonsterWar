@@ -10,7 +10,7 @@ const Game = {
     const starterEntry = Game.toCollectionEntry(starter, 1);
     Game.state = {
       version: Save.VERSION,
-      gold: 50,
+      gold: 1000,
       playerLevel: 1,
       playerExp: 0,
       team: [starter],

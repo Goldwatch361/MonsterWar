@@ -82,14 +82,22 @@ const Battle = {
     const els = Object.keys(DATA.elements);
     const element = els[Math.floor(Math.random() * els.length)];
 
-    // Poly-Anteil formt das Early-Game, levelGrowth^lv trägt das Langzeit-Wachstum
-    // synchron zur Monster-Stat-Kurve (×1,85 pro 1000 Level = pro Rang-Band à 200 Stages).
+    // HP: Poly-Anteil formt das Early-Game, der Exponential-Anteil das Langzeit-Wachstum.
     const bt = DATA.battleTuning;
     const growth = Math.pow(bt.levelGrowth, lv);
-    let hp     = Math.round(bt.enemyHpBase  * Math.pow(lv, bt.enemyHpPoly)  * growth);
-    let attack = Math.round(bt.enemyAtkBase * Math.pow(lv, bt.enemyAtkPoly) * growth);
-    let reward = Math.round(bt.rewardBase   * Math.pow(lv, bt.rewardPoly)   * growth);
-    if (isBoss) { hp = Math.round(hp * bt.bossHpMult); attack = Math.round(attack * bt.bossAtkMult); reward = Math.round(reward * bt.bossRewardMult); }
+    let hp = Math.round(bt.enemyHpBase * Math.pow(lv, bt.enemyHpPoly) * growth);
+    if (isBoss) hp = Math.round(hp * bt.bossHpMult);
+
+    // ATK folgt einer Stage-Basis, die alle enemyAtkStageBlock Stages um enemyAtkStageGrowth steigt:
+    // Basis(stage) = enemyAtkBase · enemyAtkStageGrowth^floor((stage-1) / enemyAtkStageBlock).
+    // Normale Wellen = Basis · enemyAtkNormalMult, Boss-Welle = Basis · enemyAtkBossMult.
+    const atkBlock = Math.floor((st.current - 1) / bt.enemyAtkStageBlock);
+    const atkBasis = bt.enemyAtkBase * Math.pow(bt.enemyAtkStageGrowth, atkBlock);
+    const attack = Math.round(atkBasis * (isBoss ? bt.enemyAtkBossMult : bt.enemyAtkNormalMult));
+
+    // Gold-Reward: reines Pro-Stage-Wachstum, kein Block — Gold(stage) = base · goldGrowth^(stage-1).
+    const goldGrowthFactor = Math.pow(bt.goldGrowth, st.current - 1);
+    const reward = Math.round((isBoss ? bt.goldBossBase : bt.goldNormalBase) * goldGrowthFactor);
 
     s.enemy = {
       name: (isBoss ? "👑 " : "") + tpl.name, emoji: tpl.emoji, element,
@@ -301,6 +309,7 @@ const Battle = {
     s.playSeconds = (s.playSeconds || 0) + Battle.tickMs / 1000;
 
     if (Battle.phase === "team") {
+      // Monster1 → Gegner → Monster2 → Gegner … abwechselnd, ein Angriff pro Zug.
       const attacker = Battle.nextAttacker(team);
       if (!attacker) { Events.emit("refresh"); return; }
       const dmg = Battle.calculateDamage(attacker, s.enemy, true).dmg;

@@ -208,21 +208,30 @@ DATA.enemyTiers = [
 ];
 
 /* Kampf-Feintuning: alle Formel-Konstanten aus battle.js an einem Ort.
-   Kurvenform: wert = base · lv^poly · levelGrowth^lv
-   Der Poly-Anteil formt das Early-Game, der exponentielle Anteil trägt das Langzeit-Wachstum:
-   levelGrowth = 1.85^(1/1000) → Gegner werden pro 200 Stages (= 1000 Level) um ×1,85 stärker,
+   HP-Kurvenform: wert = base · lv^poly · levelGrowth^lv (Poly formt das Early-Game).
+   ATK/Gold-Kurvenform: reine Stage-Basis (kein Level-Bezug), steigt in Blöcken von X Stages:
+     Basis(stage) = base · stageGrowth^floor((stage-1) / stageBlock)
+     Normale Welle = Basis(stage) · normalMult
+     Boss-Welle    = Basis(stage) · bossMult
+   levelGrowth = 1.85^(1/1000) → Gegner-HP wächst pro 200 Stages (= 1000 Level) um ×1,85,
    exakt im Takt der Monster-Stat-Kurve (statGrowth pro Rang). → ~200 Stages pro Rang. */
 DATA.battleTuning = {
   varianceMin: 0.85, varianceRange: 0.30,   // Schadens-Varianz: 0.85–1.15×
   defenseConstant: 0.6,                     // defReduction = def / (def + atk * K)
   defenseCap: 0.55,                         // max. Schadensreduktion durch Verteidigung
-  enemyDmgFloor: 0.03,                      // Mindest-Schaden pro Gegner-Treffer: 3% der Ziel-MaxHP — hält Farmen spürbar, ohne die Wände zu verschieben
+  enemyDmgFloor: 0.06,                      // Mindest-Schaden pro Gegner-Treffer: 6% der Ziel-MaxHP — hält Farmen deutlich spürbar, ohne die Wände zu verschieben
   enemyDmgFloorMinLevel: 50,                // Boden erst ab diesem Gegner-Level (schont das Early-Game / den Starter)
-  levelGrowth: Math.pow(1.85, 1 / 1000),    // ≈ 1.000616 pro Level
+  levelGrowth: Math.pow(1.85, 1 / 1000),    // ≈ 1.000616 pro Level (nur noch HP)
   enemyHpBase: 100, enemyHpPoly: 0.3,
-  enemyAtkBase: 1.2, enemyAtkPoly: 0.5,
-  rewardBase: 2,    rewardPoly: 0.35,
-  bossHpMult: 2.5, bossAtkMult: 1.2, bossRewardMult: 3.0,
+  bossHpMult: 2.5,
+  enemyAtkBase: 10,                         // Basis(Stage 1–10) = 10
+  enemyAtkStageGrowth: 6,                   // Basis wird alle enemyAtkStageBlock Stages mit 6 multipliziert
+  enemyAtkStageBlock: 10,                   // Basis bleibt 10 Stages lang konstant, danach nächster Sprung
+  enemyAtkNormalMult: 1.85,                 // normale Welle = Basis * 1.85
+  enemyAtkBossMult: 5,                      // Boss-Welle = Basis * 5
+  goldNormalBase: 5,                        // Gold(Stage) = goldNormalBase * goldGrowth^(stage-1) (normale Welle)
+  goldBossBase: 20,                         // Gold(Stage) = goldBossBase   * goldGrowth^(stage-1) (Boss-Welle)
+  goldGrowth: 1.2,                          // reines Pro-Stage-Wachstum, kein Block mehr
 };
 
 /* Spieler-/Expeditions-XP-Kurven (Level^Exponent * Basis) */
