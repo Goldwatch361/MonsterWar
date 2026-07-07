@@ -981,6 +981,49 @@ button { font-family: inherit; cursor: pointer; }
   position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
   z-index: 2; display: flex; flex-direction: column; gap: 14px;
 }
+/* Rechte Seite: eigener Container, ebenfalls vertikal zentriert (top:50%) —
+   liegt dadurch auf gleicher Hoehe wie der mittlere Button links (Expedition),
+   da dessen Stack durch Reise oben/Mine unten symmetrisch um die Mitte liegt. */
+.home-side-stack-right {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  z-index: 2; display: flex; flex-direction: column; gap: 14px;
+}
+@keyframes cyclone-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes cyclone-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px #8a7bff) drop-shadow(0 0 6px #6ee7ff); }
+  50%      { filter: drop-shadow(0 0 8px #8a7bff) drop-shadow(0 0 16px #6ee7ff); }
+}
+.hsb-icon-cyclone {
+  display: inline-block;
+  animation: cyclone-spin 3s linear infinite, cyclone-glow 2s ease-in-out infinite;
+}
+/* Optionen-Zahnrad: gleiche Drehung wie Prestige, nur deutlich langsamer, kein Glow */
+.hsb-icon-slowspin {
+  display: inline-block;
+  animation: cyclone-spin 8s linear infinite;
+}
+/* Mine-Spitzhacke: pendelt wie ein Pendel, Drehpunkt oben (Stiel-Ende) */
+@keyframes pendulum-swing {
+  0%, 100% { transform: rotate(-22deg); }
+  50%      { transform: rotate(22deg); }
+}
+.hsb-icon-pendulum {
+  display: inline-block;
+  transform-origin: top center;
+  animation: pendulum-swing 1.6s ease-in-out infinite;
+}
+/* Reise-Karte: wiegt wie auf einer Welle — auf/ab kombiniert mit Neigung links/rechts */
+@keyframes reise-wave {
+  0%   { transform: translateY(2px)  rotate(-10deg); }
+  25%  { transform: translateY(-3px) rotate(0deg); }
+  50%  { transform: translateY(2px)  rotate(10deg); }
+  75%  { transform: translateY(-3px) rotate(0deg); }
+  100% { transform: translateY(2px)  rotate(-10deg); }
+}
+.hsb-icon-wave {
+  display: inline-block;
+  animation: reise-wave 2.4s ease-in-out infinite;
+}
 .home-side-btn {
   position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
