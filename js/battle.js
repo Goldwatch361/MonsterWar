@@ -119,7 +119,7 @@ const Battle = {
       const cleared = st.current;
       st.best[cleared] = Battle.WAVES_PER_STAGE;
       const wasFrontier = cleared >= st.unlocked;
-      if (st.unlocked < cleared + 1) st.unlocked = cleared + 1;
+      if (st.unlocked < cleared + 1) { st.unlocked = cleared + 1; Game.checkAchievements(); }
 
       if (Battle.frontier && wasFrontier) {
         // Höchste Stage geschafft → automatisch weiter bis zum Tod
@@ -200,6 +200,7 @@ const Battle = {
     s.inventory.crystals += crystals;
     s.kills = (s.kills || 0) + 1;
     Game.addPlayerExp(10);
+    Game.checkAchievements();
 
     // Bestwert + nächste Stufe freischalten
     s.worldBoss.best = Math.max(s.worldBoss.best || 0, lv);
@@ -349,6 +350,7 @@ const Battle = {
     s.xpEarned = (s.xpEarned || 0) + xp;
     s.kills = (s.kills || 0) + 1;
     Game.addPlayerExp(xp);
+    Game.checkAchievements();
 
     // Schwebende Gold/XP-Indikatoren über dem Gegner
     const enemyEl = document.getElementById("enemy-fighter");

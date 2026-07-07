@@ -15,6 +15,7 @@ const Game = {
       playerExp: 0,
       team: [starter],
       collection: [starterEntry],
+      dexSeen: { [starter.templateId + "|" + starter.rarity]: true },
       inventory: { eggs: { standard: 0, premium: 0, elite: 0, mythic: 0, divine: 0, cosmic: 0, transcend: 0 }, crystals: 0 },
       avatarKey: Game.groupKey(starterEntry),
       mines: { standard: { owned: false, lastCollect: 0 }, elite: { owned: false, lastCollect: 0 }, goettlich: { owned: false, lastCollect: 0 }, crystal: { owned: false, lastCollect: 0 } },
@@ -28,6 +29,8 @@ const Game = {
       xpEarned: 0,
       monstersEarned: 1,
       playSeconds: 0,
+      journey: { lastClaimPeriod: null },
+      achievements: { claimed: {} },
       settings: { sound: true, autosave: true },
       lastSaveTime: Date.now(),
     };
@@ -126,6 +129,17 @@ const Game = {
         else _mergeMap.set(k, Object.assign({}, e));
       }
       Game.state.collection = [..._mergeMap.values()];
+      // Dex-Migration: alte Saves kennen "jemals besessen" noch nicht — aktuellen
+      // Bestand als Mindestwert nehmen (was zwischenzeitlich wegfusioniert wurde,
+      // gilt dann leider wieder als unentdeckt; unvermeidbar ohne historische Daten)
+      if (!Game.state.dexSeen) {
+        Game.state.dexSeen = {};
+        for (const e of Game.state.collection) Game.state.dexSeen[e.templateId + "|" + e.rarity] = true;
+      }
+      // Reise-Migration: alte Saves kennen Tagesbelohnung/Achievements noch nicht
+      if (!Game.state.journey) Game.state.journey = { lastClaimPeriod: null };
+      if (!Game.state.achievements) Game.state.achievements = { claimed: {} };
+      if (!Game.state.achievements.claimed) Game.state.achievements.claimed = {};
       // avatarKey aktualisieren falls Name sich geändert hat
       if (Game.state.avatarKey) {
         const [tid, rar] = Game.state.avatarKey.split("|");
@@ -149,6 +163,7 @@ const Game = {
       Game.state.team = Game.state.team.filter(tm => tm && tm.id);
       // Stage wird beim Laden neu gestartet (Welle 1, Team geheilt)
       Battle.startStage(Game.state.stage.current);
+      Game.checkAchievements(); // Save könnte bereits erfüllte, aber noch nicht vergebene Achievements enthalten
       return false; // kein Erststart
     }
     Game.newGame();
@@ -198,7 +213,7 @@ const Game = {
       s.playerLevel++;
       ups++;
     }
-    if (ups > 0) Events.emit("toast","⭐ Spieler-Level " + s.playerLevel + "!", "good");
+    if (ups > 0) { Events.emit("toast","⭐ Spieler-Level " + s.playerLevel + "!", "good"); Game.checkAchievements(); }
   },
 
   /* ---- Kampf-Navigation: Modus → (Team-Auswahl) → (Stage-Auswahl) → Kampf ---- */
@@ -295,6 +310,7 @@ const Game = {
     if (existing) { existing.count++; }
     else { Game.state.collection.push(Game.toCollectionEntry(m, 1)); }
     Game.state.monstersEarned = (Game.state.monstersEarned || 0) + 1;
+    Game.state.dexSeen[m.templateId + "|" + m.rarity] = true;
   },
 
   /* ---- Ei-Beschwörung ---- */
@@ -312,6 +328,7 @@ const Game = {
         Game.addMonster(mon);
         results.push(mon);
       }
+      Game.checkAchievements();
       return results;
     }
     // Großer Batch: nur Templates deren Basis-Rang ≤ gerolltem Rang (wie DEX + randomOfRarity)
@@ -343,9 +360,11 @@ const Game = {
       if (existing) existing.count += cnt;
       else Game.state.collection.push(Game.toCollectionEntry(mon, cnt));
       Game.state.monstersEarned = (Game.state.monstersEarned || 0) + cnt;
+      Game.state.dexSeen[key] = true;
       const tpl = DATA.templates[templateId];
       displayResults.push({ emoji: tpl.emoji, name: tpl.name, rarity, _displayCount: cnt });
     }
+    Game.checkAchievements();
     return displayResults;
   },
 
@@ -498,8 +517,10 @@ const Game = {
     const dst = Game.state.collection.find(e => Game.groupKey(e) === fusedKey);
     if (dst) { dst.count += pairs; }
     else { Game.state.collection.push(Game.toCollectionEntry(fused, pairs)); }
+    Game.state.dexSeen[fused.templateId + "|" + fused.rarity] = true;
     Game.state.collection = Game.state.collection.filter(e => e.count > 0);
     Game._pruneTeamToCollection();
+    Game.checkAchievements();
     return fused;
   },
 
@@ -588,6 +609,7 @@ const Game = {
     s.gold -= cfg.cost;
     s.mines[id] = { owned: true, lastCollect: Date.now() };
     Events.emit("toast",`${cfg.emoji} ${cfg.name} gekauft!`, "good");
+    Game.checkAchievements();
     UI.updateTopbar();
     Events.emit("render");
   },
@@ -728,6 +750,114 @@ const Game = {
     Events.emit("toast",`${slot.name} zurückgerufen — kein Reward.`, "bad");
     UI.updateTopbar();
     Events.emit("render");
+  },
+
+  /* ---- Reise: täglicher Bonus + Achievements ---- */
+
+  /* Fenster-Schlüssel: alle [resetHour:00, resetHour:00) Stunden bilden einen
+     "Tag". Uhrzeiten vor resetHour zählen noch zum Vortag → um resetHour
+     Stunden zurückrechnen, dann Datum (YYYY-MM-DD) bilden — daraus ergibt sich
+     ein für jedes Fenster eindeutiger, monoton fortlaufender Schlüssel. */
+  journeyPeriodKey(date = new Date()) {
+    const shifted = new Date(date.getTime() - DATA.dailyReward.resetHour * 3600_000);
+    const y = shifted.getFullYear(), m = String(shifted.getMonth() + 1).padStart(2, "0"), d = String(shifted.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  },
+
+  journeyClaimReady() {
+    return Game.state.journey.lastClaimPeriod !== Game.journeyPeriodKey();
+  },
+
+  /* ms bis zum nächsten Reset (für Countdown-Anzeige) */
+  journeyNextResetMs() {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(DATA.dailyReward.resetHour, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+    return next.getTime() - now.getTime();
+  },
+
+  journeyClaim() {
+    const s = Game.state;
+    if (!Game.journeyClaimReady()) { Events.emit("toast","Belohnung heute schon abgeholt!", "bad"); return null; }
+    const d = DATA.dailyReward;
+    const gold = d.gold(s.playerLevel);
+    const eggCount = d.eggCount(s.playerLevel);
+    s.gold += gold; s.goldEarned = (s.goldEarned || 0) + gold;
+    s.inventory.eggs[d.eggId] = (s.inventory.eggs[d.eggId] || 0) + eggCount;
+    s.inventory.crystals = (s.inventory.crystals || 0) + d.crystals;
+    s.journey.lastClaimPeriod = Game.journeyPeriodKey();
+    UI.updateTopbar();
+    Events.emit("render");
+    return { gold, eggCount, eggId: d.eggId, crystals: d.crystals };
+  },
+
+  /* Alle 13 Templates jemals bei diesem Rang besessen (siehe dexSeen, Dex-Feature) */
+  rankFullySeen(rarity) {
+    const seen = Game.state.dexSeen || {};
+    const order = DATA.rarities[rarity].order;
+    // Nur Templates zaehlen, die bei diesem Rang ueberhaupt existieren koennen —
+    // manche (z.B. Schattendrache/Licht-Greif) haben einen hoeheren Basis-Rang
+    // (legendaer) und tauchen unterhalb davon nie auf (siehe UI.dexForm-Filter).
+    const eligible = Object.keys(DATA.templates).filter(tid => DATA.rarities[DATA.templates[tid].rarity].order <= order);
+    return eligible.length > 0 && eligible.every(tid => seen[tid + "|" + rarity]);
+  },
+
+  /* Flache Liste aller Achievement-Definitionen, vereinheitlicht auf
+     {id, label, reward, met(): bool} — met() liest jeweils den passenden
+     State-Pfad der Kategorie. */
+  achievementDefs() {
+    const s = Game.state;
+    const defs = [];
+    for (const a of DATA.achievements.rankComplete) {
+      defs.push({ ...a, category: "rank", met: () => Game.rankFullySeen(a.rarity) });
+    }
+    defs.push({ ...DATA.achievements.minesComplete, category: "mines",
+      met: () => Game.MINES.every(m => s.mines[m.id]?.owned) });
+    for (const t of DATA.achievements.playtime)
+      defs.push({ ...t, category: "playtime", met: () => (s.playSeconds || 0) >= t.seconds });
+    for (const t of DATA.achievements.playerLevel)
+      defs.push({ ...t, category: "playerLevel", met: () => s.playerLevel >= t.level });
+    for (const t of DATA.achievements.kills)
+      defs.push({ ...t, category: "kills", met: () => (s.kills || 0) >= t.kills });
+    for (const t of DATA.achievements.stage)
+      defs.push({ ...t, category: "stage", met: () => (s.stage?.unlocked || 0) >= t.stage });
+    return defs;
+  },
+
+  /* Prüft alle Definitionen; jede erfüllte-aber-noch-nicht-geclaimte wird SOFORT
+     automatisch vergeben (Auto-Grant, kein manueller Claim-Button pro Achievement
+     wie bei der Tagesbelohnung). Gibt die Liste frisch vergebener zurück. */
+  checkAchievements() {
+    const s = Game.state;
+    const claimed = s.achievements.claimed;
+    const newlyGranted = [];
+    for (const def of Game.achievementDefs()) {
+      if (claimed[def.id]) continue;
+      if (!def.met()) continue;
+      const r = def.reward;
+      s.gold += r.gold; s.goldEarned = (s.goldEarned || 0) + r.gold;
+      s.inventory.crystals = (s.inventory.crystals || 0) + r.crystals;
+      if (r.eggId) s.inventory.eggs[r.eggId] = (s.inventory.eggs[r.eggId] || 0) + (r.eggCount || 1);
+      claimed[def.id] = true;
+      newlyGranted.push(def);
+    }
+    if (newlyGranted.length) {
+      for (const def of newlyGranted) Events.emit("toast", `🏆 Achievement: ${def.label}`, "good");
+      UI.updateTopbar();
+      Events.emit("render");
+    }
+    return newlyGranted;
+  },
+
+  /* Fällige Tagesbelohnung (0/1) + erfüllte-aber-noch-nicht-geclaimte Achievements
+     (Sicherheitsnetz — sollte durch Auto-Grant an den Trigger-Stellen praktisch
+     immer 0 sein) — für den Home-Button-Badge. */
+  journeyBadgeCount() {
+    const s = Game.state;
+    const dailyReady = Game.journeyClaimReady() ? 1 : 0;
+    const pendingAch = Game.achievementDefs().filter(d => !s.achievements.claimed[d.id] && d.met()).length;
+    return dailyReady + pendingAch;
   },
 
   /* ---- Settings ---- */

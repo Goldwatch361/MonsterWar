@@ -240,6 +240,102 @@ DATA.progression = {
   expeditionXpBase: 150, expeditionXpExp: 1.6,
 };
 
+/* ---- Reise: täglicher Bonus + Achievements ---- */
+/* Tägliche Belohnung: skaliert mit Spielerlevel, Reset um resetHour (lokale Zeit),
+   Fenster [resetHour:00, nächster Tag resetHour:00) = 1 "Tag". Kein Ansammeln —
+   wird das Fenster verpasst, verfällt die Belohnung ersatzlos (siehe Game.journeyClaim). */
+DATA.dailyReward = {
+  resetHour: 12,
+  gold: (lvl) => lvl * 1000,
+  eggId: "standard",
+  eggCount: (lvl) => lvl * 10,
+  crystals: 50,
+};
+
+/* Achievement-Kategorien. Jede Kategorie ist eine Liste von Tier-Definitionen
+   mit {id, label, reward:{gold,crystals,eggId?,eggCount?}}; die jeweilige
+   Erfüllungs-Bedingung wird generisch in Game.achievementDefs() ausgewertet
+   (dort gemappt auf den passenden State-Pfad: dexSeen/mines/playSeconds/
+   playerLevel/kills/stage.unlocked). Belohnungen werden automatisch bei
+   Erfüllung vergeben (kein manueller Claim wie bei der Tagesbelohnung). */
+DATA.achievements = {
+  // (a) Rang komplett entdeckt — 1 Eintrag pro Rarity, Belohnung skaliert mit
+  // Rang-Order nach demselben base*growth^order-Muster wie andere Ökonomie-
+  // Formeln (z.B. fuseCost). Ei-Tier steigt mit, gedeckelt bei "cosmic" —
+  // "transcend" bleibt der eigentlichen Progression vorbehalten.
+  rankComplete: DATA.rarityOrder.map((rarity) => {
+    const order = DATA.rarities[rarity].order;
+    return {
+      id: `rank_${rarity}`,
+      rarity,
+      label: `Alle ${DATA.rarities[rarity].name}-Monster entdeckt`,
+      reward: {
+        gold: Math.round(2000 * Math.pow(1.9, order)),
+        crystals: Math.round(20 * Math.pow(1.5, order)),
+        eggId: order >= 14 ? "cosmic" : order >= 9 ? "divine" : order >= 5 ? "elite" : order >= 2 ? "premium" : "standard",
+        eggCount: 3,
+      },
+    };
+  }),
+
+  // (b) Alle Minen im Besitz (1 Tier)
+  minesComplete: {
+    id: "mines_all",
+    label: "Alle Minen im Besitz",
+    reward: { gold: 5_000_000, crystals: 500, eggId: "divine", eggCount: 5 },
+  },
+
+  // (c) Kampfzeit-Meilensteine (state.playSeconds — zählt nur aktive Kampf-Ticks).
+  // Läuft nebenbei praktisch von selbst mit (kein aktives Zutun nötig) — Belohnung
+  // daher deutlich niedriger als bei Stage (echte Progression).
+  playtime: [
+    { id: "pt_1", seconds: 600,          label: "10 Minuten gekämpft", reward: { gold: 1_000,      crystals: 3,   eggId: "standard", eggCount: 3 } },
+    { id: "pt_2", seconds: 3600,         label: "1 Stunde gekämpft",   reward: { gold: 3_000,      crystals: 8,   eggId: "standard", eggCount: 5 } },
+    { id: "pt_3", seconds: 6 * 3600,     label: "6 Stunden gekämpft",  reward: { gold: 15_000,     crystals: 20,  eggId: "premium",  eggCount: 5 } },
+    { id: "pt_4", seconds: 24 * 3600,    label: "24 Stunden gekämpft", reward: { gold: 80_000,     crystals: 50,  eggId: "premium",  eggCount: 8 } },
+    { id: "pt_5", seconds: 3 * 86400,    label: "3 Tage gekämpft",     reward: { gold: 500_000,    crystals: 120, eggId: "elite",    eggCount: 8 } },
+    { id: "pt_6", seconds: 7 * 86400,    label: "1 Woche gekämpft",    reward: { gold: 3_000_000,  crystals: 300, eggId: "elite",    eggCount: 10 } },
+    { id: "pt_7", seconds: 14 * 86400,   label: "2 Wochen gekämpft",   reward: { gold: 15_000_000, crystals: 800, eggId: "mythic",   eggCount: 10 } },
+  ],
+
+  // (d) Spielerlevel-Meilensteine (state.playerLevel) — echter Fortschritts-Meilenstein
+  // (Level-Kurve wird steiler, Aufstieg wird zunehmend schwerer), daher nah an Stage
+  // dran statt bei Kampfzeit/Kills.
+  playerLevel: [
+    { id: "lvl_1", level: 5,   label: "Level 5 erreicht",   reward: { gold: 10_000,        crystals: 20,   eggId: "standard", eggCount: 6 } },
+    { id: "lvl_2", level: 15,  label: "Level 15 erreicht",  reward: { gold: 100_000,       crystals: 80,   eggId: "premium",  eggCount: 8 } },
+    { id: "lvl_3", level: 30,  label: "Level 30 erreicht",  reward: { gold: 1_000_000,     crystals: 300,  eggId: "elite",    eggCount: 12 } },
+    { id: "lvl_4", level: 50,  label: "Level 50 erreicht",  reward: { gold: 8_000_000,     crystals: 800,  eggId: "mythic",   eggCount: 15 } },
+    { id: "lvl_5", level: 75,  label: "Level 75 erreicht",  reward: { gold: 60_000_000,    crystals: 2000, eggId: "divine",   eggCount: 18 } },
+    { id: "lvl_6", level: 100, label: "Level 100 erreicht", reward: { gold: 400_000_000,   crystals: 5000, eggId: "cosmic",   eggCount: 20 } },
+    { id: "lvl_7", level: 150, label: "Level 150 erreicht", reward: { gold: 2_500_000_000, crystals: 12000,eggId: "cosmic",   eggCount: 25 } },
+  ],
+
+  // (e) Gegner-Kills-Meilensteine (state.kills — Stage- + WorldBoss-Kills zusammen).
+  // Läuft beim Dauer-Kämpfen automatisch mit hoch — Belohnung entsprechend gedämpft.
+  kills: [
+    { id: "kill_1", kills: 50,        label: "50 Gegner besiegt",       reward: { gold: 1_000,      crystals: 3,   eggId: "standard", eggCount: 3 } },
+    { id: "kill_2", kills: 500,       label: "500 Gegner besiegt",      reward: { gold: 4_000,      crystals: 10,  eggId: "standard", eggCount: 5 } },
+    { id: "kill_3", kills: 2500,      label: "2.500 Gegner besiegt",    reward: { gold: 25_000,     crystals: 25,  eggId: "premium",  eggCount: 5 } },
+    { id: "kill_4", kills: 10000,     label: "10.000 Gegner besiegt",   reward: { gold: 150_000,    crystals: 60,  eggId: "elite",    eggCount: 8 } },
+    { id: "kill_5", kills: 50000,     label: "50.000 Gegner besiegt",   reward: { gold: 1_000_000,  crystals: 150, eggId: "elite",    eggCount: 10 } },
+    { id: "kill_6", kills: 200000,    label: "200.000 Gegner besiegt",  reward: { gold: 6_000_000,  crystals: 400, eggId: "mythic",   eggCount: 10 } },
+    { id: "kill_7", kills: 1_000_000, label: "1 Mio. Gegner besiegt",   reward: { gold: 30_000_000, crystals: 1000,eggId: "divine",   eggCount: 12 } },
+  ],
+
+  // (f) Stage-Meilensteine (state.stage.unlocked) — erfordert echte Progression
+  // (Team-Stärke/Fusion), daher spürbar höhere Belohnung als Kampfzeit/Kills.
+  stage: [
+    { id: "stg_1", stage: 10,   label: "Stage 10 erreicht",    reward: { gold: 20_000,        crystals: 30,   eggId: "standard", eggCount: 8 } },
+    { id: "stg_2", stage: 50,   label: "Stage 50 erreicht",    reward: { gold: 200_000,       crystals: 120,  eggId: "premium",  eggCount: 10 } },
+    { id: "stg_3", stage: 200,  label: "Stage 200 erreicht",   reward: { gold: 1_500_000,     crystals: 400,  eggId: "elite",    eggCount: 15 } },
+    { id: "stg_4", stage: 500,  label: "Stage 500 erreicht",   reward: { gold: 12_000_000,    crystals: 1000, eggId: "mythic",   eggCount: 15 } },
+    { id: "stg_5", stage: 1000, label: "Stage 1.000 erreicht", reward: { gold: 100_000_000,   crystals: 2500, eggId: "divine",   eggCount: 20 } },
+    { id: "stg_6", stage: 2500, label: "Stage 2.500 erreicht", reward: { gold: 600_000_000,   crystals: 6000, eggId: "cosmic",   eggCount: 20 } },
+    { id: "stg_7", stage: 4000, label: "Stage 4.000 erreicht", reward: { gold: 4_000_000_000, crystals: 15000,eggId: "cosmic",   eggCount: 25 } },
+  ],
+};
+
 /* Offline-Cap in Sekunden (8 Stunden) */
 DATA.offlineCapSeconds = 8 * 3600;
 

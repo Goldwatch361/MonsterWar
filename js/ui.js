@@ -104,6 +104,10 @@ const UI = {
     if (UI._expTimer && UI.dashView !== "expedition") {
       clearInterval(UI._expTimer); UI._expTimer = null;
     }
+    // Reise-Timer stoppen wenn Reise-View verlassen wird
+    if (UI._journeyTimer && UI.dashView !== "journey") {
+      clearInterval(UI._journeyTimer); UI._journeyTimer = null;
+    }
     // Sky-Timer immer stoppen; wird unten neu gestartet wenn dashboard/avatar
     if (UI._skyTimer) { clearInterval(UI._skyTimer); UI._skyTimer = null; }
     UI.updateTopbar();
@@ -116,6 +120,7 @@ const UI = {
         view.innerHTML = UI.renderDashboard();
         if (UI.dashView === "mine" && Game.MINES.some(m => Game.state.mines?.[m.id]?.owned)) UI._startMineTimer();
         if (UI.dashView === "expedition" && Game.state.expedition.slots.some(Boolean)) UI._startExpeditionTimer();
+        if (UI.dashView === "journey" && !Game.journeyClaimReady()) UI._startJourneyTimer();
         if (UI.dashView === "avatar") { UI._updateSky(); UI._skyTimer = setInterval(UI._updateSky, 10_000); }
         break;
       case "home":      view.innerHTML = UI.renderHome();    UI.refresh(); break;
@@ -289,6 +294,16 @@ const UI = {
     if (UI._lpTimer) { clearTimeout(UI._lpTimer); UI._lpTimer = null; }
   },
 
+  openJourney() {
+    Game.checkAchievements(); // defensiv: Liste nie veraltet zeigen
+    UI.dashView = "journey";
+    UI.render();
+  },
+
+  openPrestige() {
+    UI.toast("♻️ Prestige — Soon!", "");
+  },
+
   openMine() {
     UI.dashView = "mine";
     UI.render();
@@ -398,6 +413,24 @@ const UI = {
       }
       if (!anyVisible) { clearInterval(UI._mineTimer); UI._mineTimer = null; }
     }, 100);
+  },
+
+  /* Countdown bis zum nächsten 12:00-Reset der Tagesbelohnung (Reise-View). */
+  _fmtCountdown(ms) {
+    const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), sec = Math.floor((ms % 60000) / 1000);
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+  },
+  _startJourneyTimer() {
+    if (UI._journeyTimer) clearInterval(UI._journeyTimer);
+    UI._journeyTimer = setInterval(() => {
+      const el = document.getElementById("journey-cd");
+      if (!el) { clearInterval(UI._journeyTimer); UI._journeyTimer = null; return; }
+      if (!Game.journeyClaimReady()) {
+        el.textContent = UI._fmtCountdown(Game.journeyNextResetMs());
+      } else {
+        UI.render(); // 12:00-Grenze während offener Ansicht überschritten → Claim-Button neu anzeigen
+      }
+    }, 1000);
   },
 
   /* Gemeinsame Cooldown-Berechnung (Minen + Expeditionen): Fortschritt + h:mm:ss/mm:ss-Text
@@ -652,6 +685,122 @@ const UI = {
     `);
   },
 
+  /* ---- Reise: tägliche Belohnung + Achievements ---- */
+  claimJourney() {
+    const r = Game.journeyClaim();
+    if (!r) return;
+    UI.showJourneyClaimModal(r);
+  },
+
+  showJourneyClaimModal(r) {
+    const eggType = DATA.eggTypes.find(e => e.id === r.eggId);
+    UI.modal(`
+      <div style="text-align:center;margin-bottom:14px">
+        <div style="font-size:42px">🎁</div>
+        <div style="font-weight:800;font-size:15px;margin-top:4px">Tägliche Belohnung</div>
+      </div>
+      <div class="exp-claim-rows">
+        <div class="exp-claim-row"><span class="exp-claim-icon">💰</span><span class="exp-claim-label">Gold</span><span class="exp-claim-val good-text">+${UI.fmt(r.gold)}</span></div>
+        <div class="exp-claim-row"><span class="exp-claim-icon">${eggType ? eggType.emoji : "🥚"}</span><span class="exp-claim-label">${eggType ? eggType.name : "Ei"}</span><span class="exp-claim-val good-text">+${r.eggCount}</span></div>
+        <div class="exp-claim-row"><span class="exp-claim-icon">💎</span><span class="exp-claim-label">Kristalle</span><span class="exp-claim-val good-text">+${r.crystals}</span></div>
+      </div>
+      <button class="btn good" style="margin-top:16px;width:100%" onclick="UI.closeModal()">Super! 🎉</button>
+    `);
+  },
+
+  /* Einzelne Achievement-Karte: Label + Reward-Vorschau + Status-Icon.
+     Kein Klick-Zustand nötig — Achievements werden automatisch bei Erfüllung vergeben. */
+  achCard(def, claimed) {
+    const icon = claimed ? "✅" : def.met() ? "🎁" : "🔒";
+    const r = def.reward;
+    return `
+      <div class="mon dex ${claimed ? "" : "unowned"}" style="--rcolor:${claimed ? "#6ee7b7" : "#5a5f72"}">
+        <div class="mhead">
+          <div class="memoji">${icon}</div>
+          <div><div class="mname">${def.label}</div></div>
+        </div>
+        <div class="mmeta" style="margin-top:4px">💰${UI.fmt(r.gold)} · 💎${r.crystals}${r.eggId ? ` · 🥚×${r.eggCount}` : ""}</div>
+      </div>`;
+  },
+
+  /* Akkordeon-Sektion für eine flache (nicht-Rarity-basierte) Achievement-Kategorie —
+     Sibling zu UI.rankSection(), das intern DATA.rarities braucht und daher hier nicht passt. */
+  achCategorySection(title, colorVar, innerHtml, count, open, toggleAttr) {
+    return `
+      <div class="rank-section">
+        <div class="rank-head-row">
+          <button class="rank-head" style="--rcolor:${colorVar}" ${toggleAttr}>
+            <span class="rh-name" style="color:${colorVar}">${title}</span>
+            <span class="rh-info">${count}</span>
+            <span class="rh-arrow">${open ? "▲" : "▼"}</span>
+          </button>
+        </div>
+        ${open ? `<div class="coll-grid rank-body">${innerHtml}</div>` : ""}
+      </div>`;
+  },
+
+  toggleAchCat(catId) { UI.achCatOpen = UI.achCatOpen || {}; UI.achCatOpen[catId] = UI.achCatOpen[catId] === false ? true : false; UI.render(); },
+
+  renderJourney() {
+    const s = Game.state;
+    const ready = Game.journeyClaimReady();
+    const d = DATA.dailyReward;
+    const previewGold = d.gold(s.playerLevel), previewEggs = d.eggCount(s.playerLevel);
+    const eggType = DATA.eggTypes.find(e => e.id === d.eggId);
+
+    const dailyBody = ready
+      ? `<button class="btn good mc-collect-btn" onclick="UI.claimJourney()">🎁 Abholen</button>`
+      : `<div class="mc-buy-desc">Nächste Belohnung in <b id="journey-cd">${UI._fmtCountdown(Game.journeyNextResetMs())}</b></div>`;
+
+    const dailySection = `
+      <div class="mine-card mc-owned" style="--mcolor:#ffd166">
+        <div class="mc-header">
+          <span class="mc-emoji ${ready ? "mine-ready-pulse" : ""}">🎁</span>
+          <div class="mc-title">
+            <div class="mc-name">Tägliche Belohnung</div>
+            <div class="mc-sub">💰${UI.fmt(previewGold)} · ${eggType ? eggType.emoji : "🥚"}×${previewEggs} · 💎${d.crystals}</div>
+          </div>
+        </div>
+        <div class="mc-body">${dailyBody}</div>
+      </div>`;
+
+    const defs = Game.achievementDefs();
+    const byCat = (cat) => defs.filter(x => x.category === cat);
+
+    const flatCategory = (title, colorVar, catId) => {
+      let tiers = byCat(catId);
+      if (catId === "rank") {
+        // Dex-Prinzip: Rang erst zeigen, sobald irgendein Monster dieses Rangs
+        // jemals besessen wurde — kein Spoiler auf noch nie erreichte Ränge.
+        const seen = s.dexSeen || {};
+        const seenKeys = Object.keys(seen);
+        tiers = tiers.filter(t => seenKeys.some(k => k.endsWith("|" + t.rarity)));
+      }
+      if (!tiers.length) return "";
+      const open = UI.achCatOpen?.[catId] !== false;
+      const doneCount = tiers.filter(t => s.achievements.claimed[t.id]).length;
+      const cards = tiers.map(t => UI.achCard(t, !!s.achievements.claimed[t.id])).join("");
+      return UI.achCategorySection(title, colorVar, cards, `${doneCount}/${tiers.length}`, open, `onclick="UI.toggleAchCat('${catId}')"`);
+    };
+
+    return `
+      <div class="panel">
+        <div class="mode-bar">
+          <button class="btn ghost sm" onclick="UI.dashView='avatar';UI.render()">← Home</button>
+        </div>
+        <h2>🗺️ Reise</h2>
+        <h3 style="margin:14px 0 8px">Tägliche Belohnung</h3>
+        <div class="mines-grid">${dailySection}</div>
+        <h3 style="margin:18px 0 8px">Achievements</h3>
+        ${flatCategory("Minen", "#00d3a7", "mines")}
+        ${flatCategory("Kampfzeit", "#4aa8ff", "playtime")}
+        ${flatCategory("Spielerlevel", "#ffd166", "playerLevel")}
+        ${flatCategory("Gegner besiegt", "#ff6b6b", "kills")}
+        ${flatCategory("Stage", "#a78bfa", "stage")}
+        ${flatCategory("Rang-Vervollständigung", "#e0a3ff", "rank")}
+      </div>`;
+  },
+
   renderProfile() {
     const s = Game.state;
     const kv = (label, value) => `<div class="kv"><span>${label}</span><b>${value}</b></div>`;
@@ -742,6 +891,7 @@ const UI = {
   },
 
   renderDashboard() {
+    if (UI.dashView === "journey") return UI.renderJourney();
     if (UI.dashView === "mine") return UI.renderMine();
     if (UI.dashView === "expedition") return UI.renderExpedition();
     if (UI.dashView === "profile") return UI.renderProfile();
@@ -841,6 +991,7 @@ const UI = {
   <path d="M374,403 L380,375 L386,403Z" fill="#122a08"/>
 </svg>`;
     const _expReady = s.expedition.slots.reduce((n, slot, i) => n + (slot && Game.expeditionReady(i) ? 1 : 0), 0);
+    const _journeyBadge = Game.journeyBadgeCount();
     return `
       <div class="home-avatar-wrap">
         ${bg}
@@ -849,18 +1000,29 @@ const UI = {
           <span class="hsb-label">Profil</span>
         </button>
         <button class="home-side-btn hsb-bottomleft" onclick="UI.openSettings()">
-          <span class="hsb-icon">⚙️</span>
+          <span class="hsb-icon hsb-icon-slowspin">⚙️</span>
           <span class="hsb-label">Optionen</span>
         </button>
         <div class="home-side-stack">
+          <button class="home-side-btn" onclick="UI.openJourney()">
+            <span class="hsb-icon hsb-icon-wave">🗺️</span>
+            <span class="hsb-label">Reise</span>
+            ${_journeyBadge ? `<span class="hsb-badge">${_journeyBadge}</span>` : ""}
+          </button>
           <button class="home-side-btn" onclick="UI.openExpedition()">
             <span class="hsb-icon">🧭</span>
             <span class="hsb-label">Expedition</span>
             ${_expReady ? `<span class="hsb-badge">${_expReady}</span>` : ""}
           </button>
           <button class="home-side-btn" onclick="UI.openMine()">
-            <span class="hsb-icon">⛏️</span>
+            <span class="hsb-icon hsb-icon-pendulum">⛏️</span>
             <span class="hsb-label">Mine</span>
+          </button>
+        </div>
+        <div class="home-side-stack-right">
+          <button class="home-side-btn" onclick="UI.openPrestige()">
+            <span class="hsb-icon hsb-icon-cyclone">♻️</span>
+            <span class="hsb-label">Prestige</span>
           </button>
         </div>
         <div class="home-av-float ${UI.glowClass(avatar.rarity)}" style="--rcolor:${rc}"
@@ -1346,10 +1508,12 @@ const UI = {
     };
   },
 
-  /* Dex: ALLE existierenden Monster über ALLE Ränge; nicht besessene nur ausgegraut */
+  /* Dex: nur Ränge, die schon mal entdeckt wurden; darin nur je entdeckte Formen
+     mit echten Werten — der Rest bleibt als "?" verborgen (kein Spoiler). */
   renderDex() {
     const s = Game.state;
-    // besessene Formen als templateId|rarity zählen
+    const seen = s.dexSeen || {};
+    // aktuell besessene Formen als templateId|rarity zählen (fürs Count-Badge/Schloss)
     const owned = {};
     for (const m of s.collection) { const k = m.templateId + "|" + m.rarity; owned[k] = (owned[k] || 0) + m.count; }
 
@@ -1363,12 +1527,34 @@ const UI = {
         .filter(Boolean)
         .sort((a, b) => a.name.localeCompare(b.name));
       if (!forms.length) return "";
+      const seenHere = forms.filter(f => seen[f.id + "|" + rarity]).length;
+      if (!seenHere) return ""; // kompletter Rang noch nie entdeckt → Rang gar nicht anzeigen
       const open = !!UI.dexOpen[rarity]; // Dex ist groß → standardmäßig zugeklappt
-      const ownedHere = forms.filter(f => owned[f.id + "|" + rarity]).length;
-      totalForms += forms.length; discoveredForms += ownedHere;
+      totalForms += forms.length; discoveredForms += seenHere;
 
       const cards = forms.map(f => {
-        const cnt = owned[f.id + "|" + rarity] || 0;
+        const key = f.id + "|" + rarity;
+        const isSeen = !!seen[key];
+        if (!isSeen) {
+          // Nie entdeckt: weder Bild/Name noch Werte verraten
+          return `
+            <div class="mon dex unowned" style="--rcolor:${UI.rarColor(rarity)}">
+              <div class="dex-lock">🔒</div>
+              <div class="mhead">
+                <div class="memoji">❓</div>
+                <div>
+                  <div class="mname">???</div>
+                  <div class="mmeta"><span class="rarity">${DATA.rarities[rarity].name}</span></div>
+                </div>
+              </div>
+              <div class="stats">
+                <span class="s-hp">❤️ <b>?</b></span>
+                <span class="s-atk">⚔️ <b>?</b></span>
+                <span class="s-def">🛡️ <b>?</b></span>
+              </div>
+            </div>`;
+        }
+        const cnt = owned[key] || 0;
         const isOwned = cnt > 0;
         return `
           <div class="mon dex ${isOwned ? UI.glowClass(rarity) : "unowned"} ${f.fused ? "fused" : ""}" style="--rcolor:${UI.rarColor(rarity)}">
@@ -1388,13 +1574,13 @@ const UI = {
             </div>
           </div>`;
       }).join("");
-      return UI.rankSection(rarity, cards, `${ownedHere}/${forms.length} entdeckt`, open, `onclick="UI.toggleDexRank('${rarity}')"`);
+      return UI.rankSection(rarity, cards, `${seenHere}/${forms.length} entdeckt`, open, `onclick="UI.toggleDexRank('${rarity}')"`);
     }).join("");
 
     return `
       <div class="panel">
         <h2>📖 Dex <span style="color:var(--muted);font-weight:400">(${discoveredForms}/${totalForms} entdeckt)</span></h2>
-        <p class="hint" style="text-align:left;padding:0 0 8px">Alle Monster über alle Ränge. Nicht besessene sind ausgegraut. Tippe einen Rang zum Aufklappen.</p>
+        <p class="hint" style="text-align:left;padding:0 0 8px">Noch nie entdeckte Ränge sind versteckt. Innerhalb eines Rangs zeigen nicht besessene Formen nur "?" — kein Spoiler. Tippe einen Rang zum Aufklappen.</p>
         ${sections}
       </div>`;
   },
