@@ -1002,27 +1002,33 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-block;
   animation: cyclone-spin 8s linear infinite;
 }
-/* Mine-Spitzhacke: pendelt wie ein Pendel, Drehpunkt oben (Stiel-Ende) */
+/* Mine-Spitzhacke: pendelt wie ein Pendel, Drehpunkt unten (Stiel-Ende in der Hand) —
+   umgekehrt zum hängenden Pendel, wirkt wie ein tatsächlicher Spitzhacken-Schwung */
 @keyframes pendulum-swing {
   0%, 100% { transform: rotate(-22deg); }
   50%      { transform: rotate(22deg); }
 }
 .hsb-icon-pendulum {
   display: inline-block;
-  transform-origin: top center;
+  transform-origin: bottom center;
   animation: pendulum-swing 1.6s ease-in-out infinite;
 }
-/* Reise-Karte: wiegt wie auf einer Welle — auf/ab kombiniert mit Neigung links/rechts */
+/* Reise-Karte: reines Auf/Ab + Links/Rechts ohne Neigung — die Bahn selbst zeichnet
+   das Wellen-Profil von der Seite (zwei Wellenberge pro Durchlauf, kehrt nahtlos zurück) */
 @keyframes reise-wave {
-  0%   { transform: translateY(2px)  rotate(-10deg); }
-  25%  { transform: translateY(-3px) rotate(0deg); }
-  50%  { transform: translateY(2px)  rotate(10deg); }
-  75%  { transform: translateY(-3px) rotate(0deg); }
-  100% { transform: translateY(2px)  rotate(-10deg); }
+  0%    { transform: translate(0px, 0px); }
+  12.5% { transform: translate(6px, -5px); }
+  25%   { transform: translate(8px, 0px); }
+  37.5% { transform: translate(6px, 5px); }
+  50%   { transform: translate(0px, 0px); }
+  62.5% { transform: translate(-6px, -5px); }
+  75%   { transform: translate(-8px, 0px); }
+  87.5% { transform: translate(-6px, 5px); }
+  100%  { transform: translate(0px, 0px); }
 }
 .hsb-icon-wave {
   display: inline-block;
-  animation: reise-wave 2.4s ease-in-out infinite;
+  animation: reise-wave 2.8s ease-in-out infinite;
 }
 .home-side-btn {
   position: relative;
