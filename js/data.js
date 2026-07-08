@@ -229,9 +229,18 @@ DATA.battleTuning = {
   enemyAtkStageBlock: 10,                   // Basis bleibt 10 Stages lang konstant, danach nächster Sprung
   enemyAtkNormalMult: 1.85,                 // normale Welle = Basis * 1.85
   enemyAtkBossMult: 5,                      // Boss-Welle = Basis * 5
-  goldNormalBase: 5,                        // Gold(Stage) = goldNormalBase * goldGrowth^(stage-1) (normale Welle)
-  goldBossBase: 20,                         // Gold(Stage) = goldBossBase   * goldGrowth^(stage-1) (Boss-Welle)
-  goldGrowth: 1.2,                          // reines Pro-Stage-Wachstum, kein Block mehr
+  // Gold: gleiche Poly+Exponential-Form wie HP (siehe oben), aber an die Wirtschafts-Rate
+  // 1.9 gekoppelt (wie fuseCost/Expedition) statt an die Stat-Rate 1.85 — Gold soll die
+  // Fusionskosten im Blick behalten, nicht 1:1 der Monster-Staerke folgen.
+  // reward = base * stage^goldPoly * goldLevelGrowth^lv (lv = globalLevel wie bei HP/ATK).
+  // Vorheriges reines goldGrowth^(stage-1) (=1.2 pro Stage) explodierte viel zu schnell
+  // (Stage 80 Boss ≈ 36 Mio. Gold) — Poly-Anteil traegt jetzt das Fruehgame, der an
+  // levelGrowth-Stil gekoppelte Exponential-Anteil das Spaetgame in vergleichbarer
+  // Groessenordnung zu den Fusionskosten (siehe Game.fuseCost).
+  goldPoly: 0.6,
+  goldLevelGrowth: Math.pow(1.9, 1 / 1000),
+  goldNormalBase: 5,                        // Basis normale Welle
+  goldBossBase: 20,                         // Basis Boss-Welle
 };
 
 /* Spieler-/Expeditions-XP-Kurven (Level^Exponent * Basis) */

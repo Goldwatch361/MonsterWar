@@ -95,8 +95,9 @@ const Battle = {
     const atkBasis = bt.enemyAtkBase * Math.pow(bt.enemyAtkStageGrowth, atkBlock);
     const attack = Math.round(atkBasis * (isBoss ? bt.enemyAtkBossMult : bt.enemyAtkNormalMult));
 
-    // Gold-Reward: reines Pro-Stage-Wachstum, kein Block — Gold(stage) = base · goldGrowth^(stage-1).
-    const goldGrowthFactor = Math.pow(bt.goldGrowth, st.current - 1);
+    // Gold-Reward: Poly-Anteil (Stage) fuers Fruehgame + Exponential-Anteil (globales Level,
+    // Wirtschafts-Rate 1.9) fuers Spaetgame — analog zur HP-Formel oben, siehe DATA.battleTuning.
+    const goldGrowthFactor = Math.pow(st.current, bt.goldPoly) * Math.pow(bt.goldLevelGrowth, lv);
     const reward = Math.round((isBoss ? bt.goldBossBase : bt.goldNormalBase) * goldGrowthFactor);
 
     s.enemy = {
